@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FSM Tree Viewer</title>
+    <style id="shared-style">
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        color: #111;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-bottom: 1px solid #ddd;
+        flex-wrap: wrap;
+        min-height: 16px;
+      }
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .file-row input[type="file"] {
+        font-size: 13px;
+      }
+      .file-row button {
+        border: 1px solid #ccc;
+        background: #fff;
+        cursor: pointer;
+        font: inherit;
+        padding: 2px 7px;
+      }
+      #add-file-btn {
+        border: 1px solid #ccc;
+        background: #fff;
+        cursor: pointer;
+        font: inherit;
+        padding: 4px 10px;
+        font-size: 13px;
+      }
+      .breadcrumb {
+        font-size: 13px;
+        color: #666;
+      }
+      .breadcrumb .crumb {
+        color: #2563eb;
+        cursor: pointer;
+      }
+      .breadcrumb .crumb:hover {
+        text-decoration: underline;
+      }
+      .breadcrumb .sep {
+        color: #999;
+        margin: 0 4px;
+      }
+      .app {
+        display: flex;
+        align-items: flex-start;
+      }
+      #stage {
+        flex: 1;
+        min-width: 0;
+        padding: 24px;
+        overflow-x: auto;
+      }
+
+      /* pure-CSS tree */
+      .tree,
+      .tree ul,
+      .tree li {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .tree {
+        text-align: center;
+      }
+      .tree ul {
+        display: flex;
+        padding-top: 20px;
+        position: relative;
+        justify-content: center;
+      }
+      .tree li {
+        position: relative;
+        padding: 20px 10px 0 10px;
+      }
+      .tree li::before,
+      .tree li::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 50%;
+        border-top: 1px solid #bbb;
+        width: 50%;
+        height: 20px;
+      }
+      .tree li::after {
+        right: auto;
+        left: 50%;
+        border-left: 1px solid #bbb;
+      }
+      .tree li:only-child::after,
+      .tree li:only-child::before {
+        display: none;
+      }
+      .tree li:only-child {
+        padding-top: 0;
+      }
+      .tree li:first-child::before {
+        border: 0 none;
+      }
+      .tree li:last-child::after {
+        border: 0 none;
+      }
+      .tree li:last-child::before {
+        border-right: 1px solid #bbb;
+      }
+      .tree ul ul::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 50%;
+        border-left: 1px solid #bbb;
+        width: 0;
+        height: 20px;
+      }
+      .tree li:only-child::before,
+      .tree li:only-child::after {
+        border: 0 none;
+      }
+
+      .node {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid #333;
+        background: #fff;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .node.empty {
+        color: #aaa;
+        border-color: #ccc;
+      }
+      .node.ellipsis {
+        font-size: 16px;
+      }
+      .node.diff-added {
+        border-color: #16a34a;
+        border-width: 2px;
+      }
+      .node.diff-removed {
+        border-color: #dc2626;
+        border-width: 2px;
+        border-style: dashed;
+      }
+      .node.diff-changed {
+        border-color: #05721d;
+        border-width: 2px;
+      }
+      .node.selected {
+        background: #111;
+        color: #fff;
+        border-color: #111;
+      }
+
+      .panel {
+        width: 380px;
+        flex-shrink: 0;
+        padding: 12px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        border-left: 1px solid #ddd;
+        display: none;
+      }
+      .panel.open {
+        display: block;
+      }
+      .note {
+        color: #666;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      input.search-input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 8px;
+        padding: 4px 6px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+      }
+      td,
+      th {
+        padding: 2px 6px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+      th {
+        cursor: pointer;
+        position: sticky;
+        top: 0;
+        background: #fff;
+      }
+      .empty-state {
+        padding: 40px;
+        text-align: center;
+        color: #888;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar" id="filebar"></div>
+    <div class="topbar breadcrumb" id="breadcrumb"></div>
+
+    <div class="app">
+      <div id="stage"><div class="empty-state">Загрузите .fsm файл</div></div>
+      <div class="panel" id="panel">
+        <div class="note" id="note" style="display: none"></div>
+        <div id="slot-view" style="display: none">
+          <input
+            type="text"
+            class="search-input"
+            id="search-input"
+            placeholder="поиск по слоту/категории"
+          />
+          <table id="table">
+            <thead>
+              <tr>
+                <th data-f="slot">слот</th>
+                <th data-f="heap">heap page</th>
+                <th data-f="category">категория</th>
+                <th data-f="avail_bytes">свободно</th>
+              </tr>
+            </thead>
+            <tbody id="list-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ============================== constants (mirror pg_fsm.c) ============================== */
+      const BLCKSZ = 8192;
+      const PAGE_HEADER_SIZE = 24;
+      const FP_NEXT_SLOT_SIZE = 4;
+      const NODES_PER_PAGE = BLCKSZ - PAGE_HEADER_SIZE - FP_NEXT_SLOT_SIZE; // 8164
+      const NONLEAF_NODES_PER_PAGE = BLCKSZ / 2 - 1; // 4095
+      const LEAF_NODES_PER_PAGE = NODES_PER_PAGE - NONLEAF_NODES_PER_PAGE; // 4069
+      const FSM_CAT_STEP = BLCKSZ / 256; // 32
+      const AUTO_EXPAND_LIMIT = 5; // node shows all children immediately while count <= this
+
+      function catToBytes(cat) {
+        return cat === 0 ? 0 : (cat - 1) * FSM_CAT_STEP;
+      }
+
+      function classifyPage(p) {
+        if (p === 0) return { level: 2, parentId: -1, logpageno: 0 };
+        const groupSize = LEAF_NODES_PER_PAGE + 1;
+        const idx = p - 1;
+        const group = Math.floor(idx / groupSize);
+        const offset = idx % groupSize;
+        const level = offset === 0 ? 1 : 0;
+        const parentId = level === 1 ? 0 : 1 + group * groupSize;
+        const logpageno =
+          level === 1 ? group : group * LEAF_NODES_PER_PAGE + offset - 1;
+        return { level, parentId, logpageno };
+      }
+
+      /* ============================== binary parsing ============================== */
+      function parseHeader(dv, off) {
+        return {
+          pd_lsn: dv.getBigUint64(off, true),
+          pd_checksum: dv.getUint16(off + 8, true),
+          pd_flags: dv.getUint16(off + 10, true),
+          pd_lower: dv.getUint16(off + 12, true),
+          pd_upper: dv.getUint16(off + 14, true),
+          pd_special: dv.getUint16(off + 16, true),
+          pd_pagesize_version: dv.getUint16(off + 18, true),
+          pd_prune_xid: dv.getUint32(off + 20, true),
+        };
+      }
+      function headerLooksValid(h) {
+        const pagesize = h.pd_pagesize_version & 0xff00;
+        const version = h.pd_pagesize_version & 0x00ff;
+        if (pagesize !== BLCKSZ) return false;
+        if (version === 0 || version > 10) return false;
+        if (h.pd_special > BLCKSZ) return false;
+        if (h.pd_lower > h.pd_upper) return false;
+        if (h.pd_upper > h.pd_special) return false;
+        return true;
+      }
+      function pageAllZero(bytes, off) {
+        for (let i = 0; i < BLCKSZ; i++) if (bytes[off + i] !== 0) return false;
+        return true;
+      }
+
+      function parseFsm(buffer) {
+        const bytes = new Uint8Array(buffer);
+        const dv = new DataView(buffer);
+        const totalPages = Math.floor(bytes.length / BLCKSZ);
+        const pages = new Array(totalPages);
+        for (let p = 0; p < totalPages; p++) {
+          const off = p * BLCKSZ;
+          const { level, parentId, logpageno } = classifyPage(p);
+          const allzero = pageAllZero(bytes, off);
+          const header = allzero ? null : parseHeader(dv, off);
+          const valid = !allzero && headerLooksValid(header);
+          const nodes = valid
+            ? bytes.subarray(
+                off + PAGE_HEADER_SIZE + FP_NEXT_SLOT_SIZE,
+                off + PAGE_HEADER_SIZE + FP_NEXT_SLOT_SIZE + NODES_PER_PAGE,
+              )
+            : null;
+          pages[p] = {
+            page: p,
+            level,
+            parentId,
+            logpageno,
+            valid,
+            allzero,
+            header,
+            nodes,
+          };
+        }
+        return { totalPages, pages };
+      }
+
+      function buildChildren(parsed) {
+        const map = new Map();
+        for (const pi of parsed.pages) {
+          if (pi.parentId < 0) continue;
+          if (!map.has(pi.parentId)) map.set(pi.parentId, []);
+          map.get(pi.parentId).push(pi.page);
+        }
+        for (const arr of map.values()) arr.sort((a, b) => a - b);
+        return map;
+      }
+
+      /* ============================== global state ============================== */
+      let slots = [{ file: null, parsed: null, children: null }];
+      let currentCtx = null;
+      let selectedId = null;
+      const openDocs = []; // {doc, uiRefs, breadcrumbEl}
+      const SHARED_STYLE = document.getElementById("shared-style").textContent;
+
+      const filebar = document.getElementById("filebar");
+      const stage = document.getElementById("stage");
+
+      const mainUiRefs = {
+        panel: document.getElementById("panel"),
+        note: document.getElementById("note"),
+        slotView: document.getElementById("slot-view"),
+        table: document.getElementById("table"),
+        listBody: document.getElementById("list-body"),
+        searchInput: document.getElementById("search-input"),
+        sortField: "slot",
+        currentSlotData: [],
+      };
+      wireSlotView(mainUiRefs);
+      openDocs.push({
+        doc: document,
+        uiRefs: mainUiRefs,
+        breadcrumbEl: document.getElementById("breadcrumb"),
+      });
+
+      function wireSlotView(uiRefs) {
+        uiRefs.searchInput.addEventListener("input", () =>
+          renderSlotTable(uiRefs),
+        );
+        uiRefs.table.querySelectorAll("th").forEach((th) =>
+          th.addEventListener("click", () => {
+            uiRefs.sortField = th.dataset.f;
+            renderSlotTable(uiRefs);
+          }),
+        );
+      }
+
+      /* ============================== file bar ============================== */
+      function renderFilebar() {
+        filebar.innerHTML = "";
+        slots.forEach((slot, i) => {
+          const row = document.createElement("div");
+          row.className = "file-row";
+          const label = document.createElement("span");
+          label.textContent = i === 0 ? "файл:" : "файл для сравнения:";
+          label.style.fontSize = "13px";
+          label.style.color = "#666";
+          row.appendChild(label);
+          const input = document.createElement("input");
+          input.type = "file";
+          input.addEventListener("change", async (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            slot.file = f.name;
+            slot.parsed = parseFsm(await f.arrayBuffer());
+            slot.children = buildChildren(slot.parsed);
+            selectedId = null;
+            renderFilebar();
+            renderStage();
+          });
+          row.appendChild(input);
+          if (slots.length > 1) {
+            const rm = document.createElement("button");
+            rm.textContent = "×";
+            rm.title = "убрать файл";
+            rm.addEventListener("click", () => {
+              slots.splice(i, 1);
+              selectedId = null;
+              renderFilebar();
+              renderStage();
+            });
+            row.appendChild(rm);
+          }
+          filebar.appendChild(row);
+        });
+        if (slots.length < 2) {
+          const addBtn = document.createElement("button");
+          addBtn.id = "add-file-btn";
+          addBtn.textContent = "+";
+          addBtn.title = "добавить файл для сравнения";
+          addBtn.addEventListener("click", () => {
+            slots.push({ file: null, parsed: null, children: null });
+            renderFilebar();
+          });
+          filebar.appendChild(addBtn);
+        }
+      }
+      renderFilebar();
+
+      /* ============================== context helpers ============================== */
+      function getContext() {
+        const loaded = slots.filter((s) => s.parsed);
+        if (loaded.length === 0) return null;
+        if (loaded.length === 1)
+          return {
+            diff: false,
+            A: loaded[0].parsed,
+            childrenA: loaded[0].children,
+          };
+        return {
+          diff: true,
+          A: loaded[0].parsed,
+          childrenA: loaded[0].children,
+          B: loaded[1].parsed,
+          childrenB: loaded[1].children,
+        };
+      }
+
+      function childrenOf(id, ctx) {
+        if (!ctx.diff) return ctx.childrenA.get(id) || [];
+        const a = ctx.childrenA.get(id) || [];
+        const b = ctx.childrenB.get(id) || [];
+        return Array.from(new Set([...a, ...b])).sort((x, y) => x - y);
+      }
+
+      function pageInfoFor(id, ctx) {
+        if (!ctx.diff) return { pi: ctx.A.pages[id], old: null };
+        const b = ctx.B.pages[id],
+          a = ctx.A.pages[id];
+        const ok = b && !b.allzero && b.valid;
+        return { pi: ok ? b : a, old: a };
+      }
+
+      function pageStatus(id, ctx) {
+        if (!ctx.diff) return "same";
+        const a = ctx.A.pages[id],
+          b = ctx.B.pages[id];
+        const aOk = a && !a.allzero && a.valid;
+        const bOk = b && !b.allzero && b.valid;
+        if (!aOk && bOk) return "added";
+        if (aOk && !bOk) return "removed";
+        if (!aOk && !bOk) return "empty";
+        for (let i = 0; i < NODES_PER_PAGE; i++) {
+          if (a.nodes[i] !== b.nodes[i]) return "changed";
+        }
+        return "same";
+      }
+
+      /* walk parentId pointers up to the root; works for any page id, valid or not */
+      function ancestorChain(id, ctx) {
+        const chain = [id];
+        let cur = id;
+        while (true) {
+          const info = ctx.diff
+            ? ctx.B.pages[cur] || ctx.A.pages[cur]
+            : ctx.A.pages[cur];
+          if (!info || info.parentId < 0) break;
+          cur = info.parentId;
+          chain.unshift(cur);
+        }
+        return chain;
+      }
+
+      /* ============================== selection + breadcrumb, synced across all open windows ============================== */
+      function selectNode(id, ctx) {
+        selectedId = id;
+        currentCtx = ctx;
+        openDocs.forEach((entry) => {
+          entry.doc
+            .querySelectorAll(".node.selected")
+            .forEach((n) => n.classList.remove("selected"));
+          const el = entry.doc.querySelector(`[data-id="${id}"]`);
+          if (el) el.classList.add("selected");
+          renderBreadcrumb(entry.doc, entry.breadcrumbEl, id, ctx);
+          openInfoPanel(id, ctx, entry.uiRefs);
+        });
+      }
+
+      function renderBreadcrumb(doc, el, id, ctx) {
+        if (id == null) {
+          el.innerHTML = "";
+          return;
+        }
+        const chain = ancestorChain(id, ctx);
+        el.innerHTML = chain
+          .map(
+            (pid) => `<span class="crumb" data-id="${pid}">${pid} fsm</span>`,
+          )
+          .join('<span class="sep">›</span>');
+        el.querySelectorAll(".crumb").forEach((c) => {
+          c.addEventListener("click", () =>
+            selectNode(parseInt(c.dataset.id, 10), ctx),
+          );
+        });
+      }
+
+      /* ============================== main tree render ============================== */
+      function renderStage() {
+        currentCtx = getContext();
+        const ctx = currentCtx;
+        if (!ctx) {
+          stage.innerHTML =
+            '<div class="empty-state">Загрузите .fsm файл</div>';
+          document.getElementById("breadcrumb").innerHTML = "";
+          return;
+        }
+        const wrap = document.createElement("div");
+        wrap.className = "tree";
+        const ul = document.createElement("ul");
+        ul.appendChild(buildNodeLi(0, ctx, document, mainUiRefs));
+        wrap.appendChild(ul);
+        stage.innerHTML = "";
+        stage.appendChild(wrap);
+        if (selectedId != null) selectNode(selectedId, ctx);
+      }
+
+      /* builds one <li> for a page, recursing into children up to AUTO_EXPAND_LIMIT;
+   beyond that, shows 4 children + an ellipsis node that opens the full list in a new window */
+      function buildNodeLi(id, ctx, doc, uiRefs) {
+        const li = doc.createElement("li");
+        const { pi } = pageInfoFor(id, ctx);
+        const div = doc.createElement("div");
+        div.dataset.id = id;
+        div.textContent = `${id} fsm`;
+        div.addEventListener("click", () => selectNode(id, ctx));
+
+        const invalid = !pi || pi.allzero || !pi.valid;
+        let cls = "node";
+        if (invalid) {
+          div.className = cls + " empty";
+          li.appendChild(div);
+          return li;
+        }
+
+        const status = pageStatus(id, ctx);
+        if (status === "added") cls += " diff-added";
+        else if (status === "removed") cls += " diff-removed";
+        else if (status === "changed") cls += " diff-changed";
+        div.className = cls;
+        li.appendChild(div);
+
+        const kids = childrenOf(id, ctx);
+        if (kids.length === 0) return li; // leaf page, nothing more to draw
+
+        const shown =
+          kids.length <= AUTO_EXPAND_LIMIT
+            ? kids
+            : kids.slice(0, AUTO_EXPAND_LIMIT - 1);
+        const ul = doc.createElement("ul");
+        shown.forEach((cid) =>
+          ul.appendChild(buildNodeLi(cid, ctx, doc, uiRefs)),
+        );
+        if (kids.length > AUTO_EXPAND_LIMIT) {
+          const eli = doc.createElement("li");
+          const ediv = doc.createElement("div");
+          ediv.className = "node ellipsis";
+          ediv.textContent = "…";
+          ediv.title = `показать все ${kids.length} страниц в новом окне`;
+          ediv.addEventListener("click", () => openFullListWindow(id, ctx));
+          eli.appendChild(ediv);
+          ul.appendChild(eli);
+        }
+        li.appendChild(ul);
+        return li;
+      }
+
+      /* ============================== popup window with the full child list ============================== */
+      function openFullListWindow(parentId, ctx) {
+        const kids = childrenOf(parentId, ctx);
+        const win = window.open("", "_blank", "width=1000,height=750");
+        if (!win) {
+          alert(
+            "Браузер заблокировал всплывающее окно — разрешите его для этой страницы.",
+          );
+          return;
+        }
+        win.document.title = `${parentId} fsm — все дочерние страницы (${kids.length})`;
+
+        const style = win.document.createElement("style");
+        style.textContent = SHARED_STYLE;
+        win.document.head.appendChild(style);
+
+        const topbar = win.document.createElement("div");
+        topbar.className = "topbar";
+        topbar.textContent = `${parentId} fsm: все ${kids.length} дочерних страниц`;
+        win.document.body.appendChild(topbar);
+
+        const breadcrumbEl = win.document.createElement("div");
+        breadcrumbEl.className = "topbar breadcrumb";
+        win.document.body.appendChild(breadcrumbEl);
+
+        const app = win.document.createElement("div");
+        app.className = "app";
+        const stageDiv = win.document.createElement("div");
+        stageDiv.id = "stage";
+        const treeWrap = win.document.createElement("div");
+        treeWrap.className = "tree";
+        const ul = win.document.createElement("ul");
+
+        const uiRefs = createPopupPanel(win.document);
+        kids.forEach((cid) =>
+          ul.appendChild(buildNodeLi(cid, ctx, win.document, uiRefs)),
+        );
+
+        treeWrap.appendChild(ul);
+        stageDiv.appendChild(treeWrap);
+        app.appendChild(stageDiv);
+        app.appendChild(uiRefs.panel);
+        win.document.body.appendChild(app);
+
+        const entry = { doc: win.document, uiRefs, breadcrumbEl };
+        openDocs.push(entry);
+        win.addEventListener("unload", () => {
+          const idx = openDocs.indexOf(entry);
+          if (idx >= 0) openDocs.splice(idx, 1);
+        });
+
+        if (selectedId != null) {
+          const el = win.document.querySelector(`[data-id="${selectedId}"]`);
+          if (el) el.classList.add("selected");
+        }
+        renderBreadcrumb(
+          win.document,
+          breadcrumbEl,
+          selectedId != null ? selectedId : parentId,
+          ctx,
+        );
+      }
+
+      function createPopupPanel(doc) {
+        const panel = doc.createElement("div");
+        panel.className = "panel";
+        const note = doc.createElement("div");
+        note.className = "note";
+        note.style.display = "none";
+        const slotView = doc.createElement("div");
+        slotView.style.display = "none";
+        const search = doc.createElement("input");
+        search.type = "text";
+        search.className = "search-input";
+        search.placeholder = "поиск по слоту/категории";
+        const table = doc.createElement("table");
+        table.innerHTML = `<thead><tr>
+      <th data-f="slot">слот</th><th data-f="heap">heap page</th>
+      <th data-f="category">категория</th><th data-f="avail_bytes">свободно</th>
+    </tr></thead><tbody></tbody>`;
+        slotView.appendChild(search);
+        slotView.appendChild(table);
+        panel.appendChild(note);
+        panel.appendChild(slotView);
+
+        const uiRefs = {
+          panel,
+          note,
+          slotView,
+          table,
+          listBody: table.querySelector("tbody"),
+          searchInput: search,
+          sortField: "slot",
+          currentSlotData: [],
+        };
+        wireSlotView(uiRefs);
+        return uiRefs;
+      }
+
+      /* ============================== info / slot panel ============================== */
+      function openInfoPanel(id, ctx, uiRefs) {
+        const { pi, old } = pageInfoFor(id, ctx);
+        uiRefs.panel.classList.add("open");
+
+        if (!pi || pi.allzero || !pi.valid) {
+          uiRefs.slotView.style.display = "none";
+          uiRefs.note.style.display = "block";
+          uiRefs.note.textContent = `${id} fsm: страница пуста (неинициализирована) или её заголовок не прошёл проверку — реальных данных на ней нет.`;
+          return;
+        }
+
+        const kids = childrenOf(id, ctx);
+        if (kids.length > 0) {
+          uiRefs.slotView.style.display = "none";
+          uiRefs.note.style.display = "block";
+          uiRefs.note.innerHTML =
+            `<b>${id} fsm</b> — служебная страница (${pi.level === 2 ? "root" : "internal"}), не лист.<br>` +
+            `дочерних страниц: ${kids.length}<br>` +
+            `pd_lower=${pi.header.pd_lower}, pd_upper=${pi.header.pd_upper}, pd_special=${pi.header.pd_special}<br>` +
+            `логическая позиция: ${pi.logpageno}`;
+          return;
+        }
+
+        uiRefs.note.style.display = "none";
+        uiRefs.slotView.style.display = "block";
+        uiRefs.currentSlotData = [];
+        for (let s = 0; s < LEAF_NODES_PER_PAGE; s++) {
+          const cat = pi.nodes[NONLEAF_NODES_PER_PAGE + s];
+          const heap = pi.logpageno * LEAF_NODES_PER_PAGE + s;
+          const row = {
+            slot: s,
+            heap,
+            category: cat,
+            avail_bytes: catToBytes(cat),
+          };
+          if (ctx.diff && old && old.nodes) {
+            const oldCat = old.nodes[NONLEAF_NODES_PER_PAGE + s];
+            row.old_category = oldCat;
+            row.changed = oldCat !== cat;
+          }
+          uiRefs.currentSlotData.push(row);
+        }
+        uiRefs.searchInput.value = "";
+        renderSlotTable(uiRefs);
+      }
+
+      function renderSlotTable(uiRefs) {
+        const q = uiRefs.searchInput.value.trim().toLowerCase();
+        const rows = uiRefs.currentSlotData
+          .filter(
+            (r) => String(r.slot).includes(q) || String(r.category).includes(q),
+          )
+          .sort((a, b) =>
+            a[uiRefs.sortField] < b[uiRefs.sortField]
+              ? 1
+              : a[uiRefs.sortField] > b[uiRefs.sortField]
+                ? -1
+                : 0,
+          );
+        uiRefs.listBody.innerHTML = rows
+          .map((r) => {
+            const diffTxt =
+              r.changed !== undefined
+                ? r.changed
+                  ? ` <span style="color:${r.category > r.old_category ? "#16a34a" : "#dc2626"}">(${r.old_category}→${r.category})</span>`
+                  : ""
+                : "";
+            return `<tr><td>${r.slot}</td><td>${r.heap}</td><td>${r.category}${diffTxt}</td><td>${r.avail_bytes} B</td></tr>`;
+          })
+          .join("");
+      }
+
+      renderStage();
+    </script>
+  </body>
+</html>

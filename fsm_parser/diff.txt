@@ -1,0 +1,31 @@
+=== pg_fsm diff ===
+old: /Users/dariakorsun/pgdata1/base/5/16404_fsm (3 pages)
+new: /Users/dariakorsun/pgdata1/base/5/16404_0_fsm (3 pages)
+(--only-changed: SAME/empty subtrees are hidden)
+printing only pages [2, 2]
+
+        \-- 2 fsm [LEAF] CHANGED
+              internal-slot    0: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot    1: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot    3: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot    7: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot   15: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot   31: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot   63: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot  127: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot  255: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot  511: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot 1023: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              internal-slot 2047: 245 -> 248 ( 7808 ->  7904 B) UP  ->
+              leaf-slot    0 (heap page      0): 245 -> 248 ( 7808 ->  7904 B) UP  ->
+
+--------------------------------------------------------------
+SUMMARY
+--------------------------------------------------------------
+pages changed: 3  added: 0  removed: 0  headers changed: 0 (structural: 0)
+node slots changed: 39 (gained space: 39, lost space: 0)
+
+top 3 changed heap page(s) by |delta bytes|:
+  heap page      0: +96 byte(s)
+  heap page      0: +96 byte(s)
+  heap page      0: +96 byte(s)
