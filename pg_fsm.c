@@ -25,7 +25,6 @@
 #include <string.h>
 
 #include "access/htup_details.h"
-#include "postgres.h"
 #include "storage/bufpage.h"
 #include "storage/fsm_internals.h"
 
@@ -360,11 +359,11 @@ static void print_leaf_compressed(FILE *out, const char *indent,
     long hp_end = pi->logpageno * LeafNodesPerPage + r->end;
     if (r->start == r->end)
       fprintf(out,
-              "%s    heap page %8ld         : category= %3-u avail_bytes=%5-u\n",
+              "%s    heap page %8ld         : category= %-3u avail_bytes=%-5u\n",
               indent, hp_start, r->value, avail);
     else
       fprintf(out,
-              "%s    heap page %8ld-%-8ld: category= %-3u avail_bytes=%5-u "
+              "%s    heap page %8ld-%-8ld: category= %-3u avail_bytes=%-5u "
               "(%ld page(s))\n",
               indent, hp_start, hp_end, r->value, avail, hp_end - hp_start + 1);
   }
@@ -456,7 +455,7 @@ static void dump_node(FILE *out, PageInfo *pages, LongVec *children,
         fprintf(out, "%s  page max: category=%u (%u bytes) at slot %ld\n",
                 child_indent, agg.max_cat, cat_to_bytes(agg.max_cat),
                 agg.max_slot);
-        fprintf(out, "%s  page total avail_bytes: %.0f \n",
+        fprintf(out, "%s  Free space on page: %.0f (sum over %d slots)\n",
                 child_indent, agg.total_avail, (int)LeafNodesPerPage);
         if (opts->show_slots) {
           if (opts->expand)
@@ -646,7 +645,7 @@ static int cmp_leafdelta_by_total_abs_desc(const void *pa, const void *pb) {
   return 0;
 }
 
-static void print_internal_diff(FILE *out, const char *indent,
+static void print_internal_diff(FILE *out, int do_print, const char *indent,
                                 const PageInfo *a, const PageInfo *b,
                                 const FsmOptions *opts, DiffStats *st) {
   ByteDiffRunVec runs =
@@ -659,6 +658,7 @@ static void print_internal_diff(FILE *out, const char *indent,
       st->slots_up += r->end - r->start + 1;
     else
       st->slots_down += r->end - r->start + 1;
+    if (!do_print) continue;
     if (r->start == r->end)
       fprintf(out, "%s  internal-node %4ld           : %3u -> %3u\n", indent,
               r->start, r->old_value, r->new_value);
@@ -671,9 +671,10 @@ static void print_internal_diff(FILE *out, const char *indent,
   free(runs.items);
 }
 
-static void print_leaf_diff(FILE *out, const char *indent, const PageInfo *a,
-                            const PageInfo *b, const FsmOptions *opts,
-                            DiffStats *st, LeafDeltaVec *deltas) {
+static void print_leaf_diff(FILE *out, int do_print, const char *indent,
+                            const PageInfo *a, const PageInfo *b,
+                            const FsmOptions *opts, DiffStats *st,
+                            LeafDeltaVec *deltas) {
   const uint8 *la = a->nodes + NonLeafNodesPerPage;
   const uint8 *lb = b->nodes + NonLeafNodesPerPage;
   ByteDiffRunVec runs = compute_byte_diff_runs(la, lb, LeafNodesPerPage);
@@ -690,6 +691,7 @@ static void print_leaf_diff(FILE *out, const char *indent, const PageInfo *a,
     else
       st->slots_down += n;
     ld_push(deltas, hp_start, hp_end, (long)nb - (long)ob);
+    if (!do_print) continue;
     if (hp_start == hp_end)
       fprintf(out,
               "%s  leaf-slot heap page %8ld           : %3u -> %3u (%5u -> %5u "
@@ -754,17 +756,9 @@ static void diff_node(FILE *out, PageInfo *A, long totalA, PageInfo *B,
         fprintf(out, "%s  header changed (lsn/checksum only)\n", child_indent);
       }
     }
-    if (show && opts->show_internal)
-      print_internal_diff(out, child_indent, a, b, opts, st);
-    if (show)
-      print_leaf_diff(out, child_indent, a, b, opts, st, deltas);
-    else {
-      FILE *devnull = fopen("/dev/null", "w");
-      if (devnull) {
-        print_leaf_diff(devnull, child_indent, a, b, opts, st, deltas);
-        fclose(devnull);
-      }
-    }
+    if (opts->show_internal)
+      print_internal_diff(out, show, child_indent, a, b, opts, st);
+    print_leaf_diff(out, show, child_indent, a, b, opts, st, deltas);
   }
 
   if (id >= (totalA > totalB ? totalA : totalB)) return;
@@ -892,7 +886,7 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
 
 static void fsm_usage(const char *prog) {
   fprintf(stderr,
-          "fsm_fsm_usage:\n"
+          "usage:\n"
           "  %s dump [flags] <relfilenode_fsm> <out.txt>\n"
           "  %s diff [flags] <old_fsm> <new_fsm> <out.txt>\n"
           "flags:\n"

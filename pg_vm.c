@@ -1,22 +1,13 @@
 /*
  * Flags:
- *   -H                 also print a per-physical-page header inventory
- *                      (pd_lsn/flags/lower/upper/special) ahead of the
- *                      heap-range report
+ *   -H                 print a per-physical-page header inventory        
  *   -q                 suppress the summary block at the end
- *   --heap-range A-B   only process heap pages [A,B] (default: whole file)
- *   --heap-page N      dump only: status of exactly one heap page, no
- *                      range walk at all
- *   --expand           print one line per heap page instead of compressed
- *                      ranges - REQUIRES --heap-range, to stop you from
- *                      accidentally asking for hundreds of thousands of
- *                      lines
- *   --only-not-visible dump: only print ranges where ALL_VISIBLE is unset
- *                      (candidates for a future lazy vacuum pass)
- *   --only-not-frozen  dump: only print ranges where ALL_FROZEN is unset
- *                      (candidates for anti-wraparound vacuum)
- *   --only-changed     diff: only print ranges whose status actually
- *                      differs between the two files
+ *   --heap-range A-B   only process heap pages [A,B] 
+ *   --heap-page N      dump only: status of exactly one heap page
+ *   --expand           print one line per heap page 
+ *   --only-not-visible dump: only print ranges where ALL_VISIBLE 
+ *   --only-not-frozen  dump: only print ranges where ALL_FROZEN 
+ *   --only-changed     diff: 
  */
 
 #include "postgres.h"
@@ -27,7 +18,6 @@
 #include <string.h>
 
 #include "access/visibilitymapdefs.h"
-#include "postgres.h"
 #include "storage/bufpage.h"
 
 #define MAP_SIZE ((int)(BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
@@ -477,7 +467,7 @@ static int do_vm_diff(const char *old_path, const char *new_path,
 
 static void vm_usage(const char *prog) {
   fprintf(stderr,
-          "vm_usage:\n"
+          "usage:\n"
           "  %s dump [flags] <relfilenode_vm> <out.txt>\n"
           "  %s diff [flags] <old_vm> <new_vm> <out.txt>\n"
           "flags:\n"
