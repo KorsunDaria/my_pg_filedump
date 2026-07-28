@@ -137,6 +137,9 @@ typedef enum optionReturnCodes
 #define EOF_ENCOUNTERED (-1)	/* Indicator for partial read */
 #define BYTES_PER_LINE 16		/* Format the binary 16 bytes per line */
 
+#define OPT_FSM   0x00010000  /* Interpret as Free Space Map */
+#define OPT_VM    0x00020000  /* Interpret as Visibility Map */
+
 /* Constants for pg_relnode.map decoding */
 #define RELMAPPER_MAGICSIZE   4
 #define RELMAPPER_FILESIZE    512

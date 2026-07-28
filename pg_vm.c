@@ -20,41 +20,42 @@
  */
 
 #include "postgres.h"
-#include "storage/bufpage.h"
-#include "access/visibilitymapdefs.h"
+#include "pg_vm.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "access/visibilitymapdefs.h"
+#include "postgres.h"
+#include "storage/bufpage.h"
+
 #define MAP_SIZE ((int)(BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
 #define HEAPBLOCKS_PER_BYTE (8 / BITS_PER_HEAPBLOCK) /* 4 */
 #define HEAPBLOCKS_PER_PAGE (MAP_SIZE * HEAPBLOCKS_PER_BYTE)
 
-
 #define VM_STATUS_OUT_OF_FILE (-1)
-#define VM_STATUS_CORRUPT (-2)    
-
+#define VM_STATUS_CORRUPT (-2)
 
 typedef struct {
   long page;
-  int valid;   
-  int allzero; 
+  int valid;
+  int allzero;
   uint16 pd_flags;
   uint16 pd_checksum;
-  uint64 lsn; 
+  uint64 lsn;
   LocationIndex pd_lower, pd_upper, pd_special;
   uint16 pd_pagesize_version;
   uint8 bitmap[MAP_SIZE];
 } VmPageInfo;
 
-static int page_is_all_zero(const uint8 *buf) {
+static int vm_page_is_all_zero(const uint8 *buf) {
   for (int i = 0; i < BLCKSZ; i++)
     if (buf[i] != 0) return 0;
   return 1;
 }
 
-static int header_looks_valid(PageHeader ph) {
+static int vm_header_looks_valid(PageHeader ph) {
   uint16 pagesize = ph->pd_pagesize_version & 0xFF00;
   uint16 version = ph->pd_pagesize_version & 0x00FF;
   if (pagesize != BLCKSZ) return 0;
@@ -91,10 +92,10 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
     }
     VmPageInfo *pi = &pages[p];
     pi->page = p;
-    pi->allzero = page_is_all_zero(buf);
+    pi->allzero = vm_page_is_all_zero(buf);
 
     PageHeader ph = (PageHeader)buf;
-    pi->valid = !pi->allzero && header_looks_valid(ph);
+    pi->valid = !pi->allzero && vm_header_looks_valid(ph);
     pi->pd_flags = ph->pd_flags;
     pi->pd_checksum = ph->pd_checksum;
     pi->lsn = PageGetLSN((Page)buf);
@@ -114,7 +115,7 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
 }
 
 static int heap_page_status(const VmPageInfo *pages, long total_pages,
-                             long heap_page) {
+                            long heap_page) {
   long vm_page = heap_page / HEAPBLOCKS_PER_PAGE;
   if (vm_page >= total_pages) return VM_STATUS_OUT_OF_FILE;
 
@@ -146,7 +147,7 @@ static void run_push(VmRunVec *v, long start, long end, int status) {
 }
 
 static VmRunVec compute_runs(const VmPageInfo *pages, long total_pages,
-                              long from, long to) {
+                             long from, long to) {
   VmRunVec runs = {0};
   if (to < from) return runs;
 
@@ -175,7 +176,7 @@ typedef struct {
 } VmDiffRunVec;
 
 static void diffrun_push(VmDiffRunVec *v, long start, long end, int os,
-                          int ns) {
+                         int ns) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 16;
     v->items = realloc(v->items, v->cap * sizeof(VmDiffRun));
@@ -184,8 +185,8 @@ static void diffrun_push(VmDiffRunVec *v, long start, long end, int os,
 }
 
 static VmDiffRunVec compute_diff_runs(const VmPageInfo *A, long totalA,
-                                       const VmPageInfo *B, long totalB,
-                                       long from, long to) {
+                                      const VmPageInfo *B, long totalB,
+                                      long from, long to) {
   VmDiffRunVec runs = {0};
   if (to < from) return runs;
 
@@ -206,20 +207,6 @@ static VmDiffRunVec compute_diff_runs(const VmPageInfo *A, long totalA,
   return runs;
 }
 
-
-typedef struct {
-  int show_headers;      /* -H */
-  int stats;             /* on by default, -q turns off */
-  int has_heap_range;     /* --heap-range A-B */
-  long heap_from, heap_to;
-  int has_heap_page;      /* --heap-page N */
-  long heap_page_query;
-  int expand;             /* --expand (requires has_heap_range) */
-  int only_not_visible;   /* --only-not-visible (dump) */
-  int only_not_frozen;    /* --only-not-frozen (dump) */
-  int only_changed;       /* --only-changed (diff) */
-} Options;
-
 static const char *status_label(int status) {
   switch (status) {
     case 0:
@@ -227,7 +214,7 @@ static const char *status_label(int status) {
     case VISIBILITYMAP_ALL_VISIBLE:
       return "visible";
     case VISIBILITYMAP_ALL_FROZEN:
-      return "frozen-only(!)"; 
+      return "frozen-only(!)";
     case VISIBILITYMAP_ALL_VISIBLE | VISIBILITYMAP_ALL_FROZEN:
       return "visible+frozen";
     case VM_STATUS_OUT_OF_FILE:
@@ -247,7 +234,7 @@ static int status_has_frozen(int status) {
 }
 
 static void print_page_inventory(FILE *out, const VmPageInfo *pages,
-                                  long total_pages) {
+                                 long total_pages) {
   fprintf(out, "\n-- physical page inventory (-H) --\n");
   for (long p = 0; p < total_pages; p++) {
     const VmPageInfo *pi = &pages[p];
@@ -267,7 +254,7 @@ static void print_page_inventory(FILE *out, const VmPageInfo *pages,
   }
 }
 
-static void print_runs(FILE *out, const VmRunVec *runs, const Options *opts) {
+static void print_runs(FILE *out, const VmRunVec *runs, const VmOptions *opts) {
   for (long i = 0; i < runs->count; i++) {
     const VmRun *r = &runs->items[i];
     if (opts->only_not_visible && status_has_visible(r->status)) continue;
@@ -282,9 +269,8 @@ static void print_runs(FILE *out, const VmRunVec *runs, const Options *opts) {
   }
 }
 
-static void print_expanded(FILE *out, const VmPageInfo *pages,
-                            long total_pages, long from, long to,
-                            const Options *opts) {
+static void print_expanded(FILE *out, const VmPageInfo *pages, long total_pages,
+                           long from, long to, const VmOptions *opts) {
   for (long hp = from; hp <= to; hp++) {
     int st = heap_page_status(pages, total_pages, hp);
     if (opts->only_not_visible && status_has_visible(st)) continue;
@@ -294,15 +280,14 @@ static void print_expanded(FILE *out, const VmPageInfo *pages,
 }
 
 static void print_diff_runs(FILE *out, const VmDiffRunVec *runs,
-                             const Options *opts) {
+                            const VmOptions *opts) {
   for (long i = 0; i < runs->count; i++) {
     const VmDiffRun *r = &runs->items[i];
     if (opts->only_changed && r->old_status == r->new_status) continue;
     const char *tag = r->old_status == r->new_status ? "same" : "CHANGED";
     if (r->heap_start == r->heap_end)
-      fprintf(out, "heap page %8ld           : %s -> %s  [%s]\n",
-              r->heap_start, status_label(r->old_status),
-              status_label(r->new_status), tag);
+      fprintf(out, "heap page %8ld           : %s -> %s  [%s]\n", r->heap_start,
+              status_label(r->old_status), status_label(r->new_status), tag);
     else
       fprintf(out, "heap pages %8ld-%-8ld: %s -> %s  [%s] (%ld page(s))\n",
               r->heap_start, r->heap_end, status_label(r->old_status),
@@ -312,8 +297,8 @@ static void print_diff_runs(FILE *out, const VmDiffRunVec *runs,
 }
 
 static void print_expanded_diff(FILE *out, const VmPageInfo *A, long totalA,
-                                 const VmPageInfo *B, long totalB, long from,
-                                 long to, const Options *opts) {
+                                const VmPageInfo *B, long totalB, long from,
+                                long to, const VmOptions *opts) {
   for (long hp = from; hp <= to; hp++) {
     int os = heap_page_status(A, totalA, hp);
     int ns = heap_page_status(B, totalB, hp);
@@ -327,8 +312,8 @@ static long default_heap_to(long total_pages) {
   return total_pages * (long)HEAPBLOCKS_PER_PAGE - 1;
 }
 
-static int do_dump(const char *in_path, const char *out_path,
-                    const Options *opts) {
+static int do_vm_dump(const char *in_path, const char *out_path,
+                       const VmOptions *opts) {
   long total_pages;
   VmPageInfo *pages = load_vm(in_path, &total_pages);
   if (!pages) return 1;
@@ -390,11 +375,10 @@ static int do_dump(const char *in_path, const char *out_path,
         if (status_has_frozen(runs.items[i].status)) frozen += n;
         if (runs.items[i].status == VM_STATUS_CORRUPT) corrupt_runs++;
       }
-      fprintf(
-          out,
-          "\n--------------------------------------------------------------"
-          "\nSUMMARY\n--------------------------------------------------"
-          "------------\n");
+      fprintf(out,
+              "\n--------------------------------------------------------------"
+              "\nSUMMARY\n--------------------------------------------------"
+              "------------\n");
       fprintf(out, "heap pages in range: %ld, compressed into %ld run(s)\n",
               to - from + 1, runs.count);
       fprintf(out, "all-visible: %ld  all-frozen: %ld  corrupt page(s): %ld\n",
@@ -409,8 +393,8 @@ static int do_dump(const char *in_path, const char *out_path,
   return 0;
 }
 
-static int do_diff(const char *old_path, const char *new_path,
-                    const char *out_path, const Options *opts) {
+static int do_vm_diff(const char *old_path, const char *new_path,
+                   const char *out_path, const VmOptions *opts) {
   long totalA, totalB;
   VmPageInfo *A = load_vm(old_path, &totalA);
   if (!A) return 1;
@@ -469,11 +453,10 @@ static int do_diff(const char *old_path, const char *new_path,
         if (!of && nf) gained_frozen += n;
         if (of && !nf) lost_frozen += n;
       }
-      fprintf(
-          out,
-          "\n--------------------------------------------------------------"
-          "\nSUMMARY\n--------------------------------------------------"
-          "------------\n");
+      fprintf(out,
+              "\n--------------------------------------------------------------"
+              "\nSUMMARY\n--------------------------------------------------"
+              "------------\n");
       fprintf(out, "heap pages in range: %ld, compressed into %ld run(s)\n",
               to - from + 1, runs.count);
       fprintf(out, "changed heap pages: %ld\n", changed_pages);
@@ -492,9 +475,9 @@ static int do_diff(const char *old_path, const char *new_path,
   return 0;
 }
 
-static void usage(const char *prog) {
+static void vm_usage(const char *prog) {
   fprintf(stderr,
-          "usage:\n"
+          "vm_usage:\n"
           "  %s dump [flags] <relfilenode_vm> <out.txt>\n"
           "  %s diff [flags] <old_vm> <new_vm> <out.txt>\n"
           "flags:\n"
@@ -512,8 +495,8 @@ static void usage(const char *prog) {
           prog, prog);
 }
 
-static void parse_flags(int argc, char **argv, int start, Options *opts,
-                         char **pos, int *npos) {
+static void parse_vm_flags(int argc, char **argv, int start, VmOptions *opts,
+                        char **pos, int *npos) {
   *npos = 0;
   for (int i = start; i < argc; i++) {
     const char *a = argv[i];
@@ -558,33 +541,33 @@ static void parse_flags(int argc, char **argv, int start, Options *opts,
   }
 }
 
-int main(int argc, char **argv) {
+int vm_main(int argc, char **argv) {
   if (argc < 2) {
-    usage(argv[0]);
+    vm_usage(argv[0]);
     return 1;
   }
 
-  Options opts = {0};
+  VmOptions opts = {0};
   opts.stats = 1;
   char *pos[8];
   int npos = 0;
 
   if (strcmp(argv[1], "dump") == 0) {
-    parse_flags(argc, argv, 2, &opts, pos, &npos);
+    parse_vm_flags(argc, argv, 2, &opts, pos, &npos);
     if (npos != 2) {
-      usage(argv[0]);
+      vm_usage(argv[0]);
       return 1;
     }
-    return do_dump(pos[0], pos[1], &opts);
+    return do_vm_dump(pos[0], pos[1], &opts);
   } else if (strcmp(argv[1], "diff") == 0) {
-    parse_flags(argc, argv, 2, &opts, pos, &npos);
+    parse_vm_flags(argc, argv, 2, &opts, pos, &npos);
     if (npos != 3) {
-      usage(argv[0]);
+      vm_usage(argv[0]);
       return 1;
     }
-    return do_diff(pos[0], pos[1], pos[2], &opts);
+    return do_vm_diff(pos[0], pos[1], pos[2], &opts);
   }
 
-  usage(argv[0]);
+  vm_usage(argv[0]);
   return 1;
 }

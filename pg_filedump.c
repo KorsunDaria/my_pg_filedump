@@ -30,6 +30,9 @@
 #undef Assert
 #define Assert(X)
 
+#include "pg_fsm.h"
+#include "pg_vm.h"
+
 #include "storage/checksum.h"
 #include "storage/checksum_impl.h"
 #include "decode.h"
@@ -213,7 +216,9 @@ DisplayOptions(unsigned int validOptions)
 		 "  -S  Force block size to [blocksize]\n"
 		 "Additional functions:\n"
 		 "  -m  Interpret file as pg_filenode.map file and print contents (all\n"
-		 "      other options will be ignored)\n" 
+		 "      other options will be ignored)\n"
+		 "  -F  Interpret file as FSM (Free Space Map) file\n" 
+         "  -V  Interpret file as VM (Visibility Map) file\n"
 		 "\nReport bugs to <pgsql-bugs@postgresql.org>\n");
 }
 
@@ -591,7 +596,12 @@ ConsumeOptions(int numOptions, char **options)
 							exitCode = 1;
 						}
 						break;
-
+					case 'M':
+    					SET_OPTION(blockOptions, OPT_FSM, 'M');
+    					break;
+					case 'V':
+						SET_OPTION(blockOptions, OPT_VM, 'V');
+						break;
 					default:
 						rc = OPT_RC_INVALID;
 						printf("Error: Unknown option <%c>.\n", optionString[y]);
@@ -2590,11 +2600,39 @@ PrintRelMappings(void)
 	return 1;
 }
 
+static int run_module(int argc, char **argv, int flag_index, int (*module_main)(int, char**)) {
+    char **new_argv = malloc(argc * sizeof(char *));
+    int new_argc = 0;
+
+    for (int i = 0; i < argc; i++) {
+        if (i != flag_index) {
+            new_argv[new_argc++] = argv[i];
+        }
+    }
+
+    int result = module_main(new_argc, new_argv);
+    free(new_argv);
+    return result;
+}
+
 /* Consume the options and iterate through the given file, formatting as
  * requested. */
 int
 main(int argv, char **argc)
 {
+
+	for (int i = 1; i < argv; i++)
+    {
+        if (strcmp(argc[i], "-F") == 0)
+        {
+            return run_module(argv, argc, i, fsm_main);
+        }
+        if (strcmp(argc[i], "-V") == 0)
+        {
+            return run_module(argv, argc, i, vm_main);
+        }
+    }
+
 	/* If there is a parameter list, validate the options */
 	unsigned int validOptions;
 

@@ -1,0 +1,25 @@
+stringinfo.o: stringinfo.c \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/c.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/c.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h:
