@@ -13,10 +13,10 @@
  *   --heap-page N     dump only: locate heap page N in the FSM tree
  *   --min-avail N     dump -s only: filter leaf slot RANGES by avail_bytes
  *   --max-avail N
- *   --only-changed    diff only: hide SAME/empty subtrees and unchanged
- *                     slot ranges
+ *   --only-changed    diff only
  *
  */
+
 #include "postgres.h"
 #include "pg_fsm.h"
 
@@ -307,18 +307,25 @@ static const char *depth_label_indent(int level) {
 
 static void print_internal_compressed(FILE *out, const char *indent,
                                       const PageInfo *pi) {
-  ByteRunVec runs = compute_byte_runs(pi->nodes, NonLeafNodesPerPage);
+ByteRunVec runs = compute_byte_runs(pi->nodes, NonLeafNodesPerPage);
+  
   fprintf(out, "%s  internal fan-out (%d node(s), %ld run(s)):\n", indent,
           (int)NonLeafNodesPerPage, runs.count);
+
   for (long i = 0; i < runs.count; i++) {
     const ByteRun *r = &runs.items[i];
+    char range_str[32];
+
+    /* Формируем диапазон в скобках [A-B] или [A] */
     if (r->start == r->end)
-      fprintf(out, "%s    node %4ld           : category=%3u\n", indent,
-              r->start, r->value);
+      snprintf(range_str, sizeof(range_str), "[%ld]", r->start);
     else
-      fprintf(out, "%s    nodes %4ld-%-4ld    : category=%3u (%ld node(s))\n",
-              indent, r->start, r->end, r->value, r->end - r->start + 1);
+      snprintf(range_str, sizeof(range_str), "[%ld-%ld]", r->start, r->end);
+
+    /* Выводим с фиксированным отступом колонки в 20 символов */
+    fprintf(out, "%s    %-20s %3u\n", indent, range_str, r->value);
   }
+
   free(runs.items);
 }
 
@@ -353,11 +360,11 @@ static void print_leaf_compressed(FILE *out, const char *indent,
     long hp_end = pi->logpageno * LeafNodesPerPage + r->end;
     if (r->start == r->end)
       fprintf(out,
-              "%s    heap page %8ld           : category=%3u avail_bytes=%5u\n",
+              "%s    heap page %8ld         : category= %3-u avail_bytes=%5-u\n",
               indent, hp_start, r->value, avail);
     else
       fprintf(out,
-              "%s    heap pages %8ld-%-8ld: category=%3u avail_bytes=%5u "
+              "%s    heap page %8ld-%-8ld: category= %-3u avail_bytes=%5-u "
               "(%ld page(s))\n",
               indent, hp_start, hp_end, r->value, avail, hp_end - hp_start + 1);
   }
@@ -449,7 +456,7 @@ static void dump_node(FILE *out, PageInfo *pages, LongVec *children,
         fprintf(out, "%s  page max: category=%u (%u bytes) at slot %ld\n",
                 child_indent, agg.max_cat, cat_to_bytes(agg.max_cat),
                 agg.max_slot);
-        fprintf(out, "%s  page total avail_bytes: %.0f (sum over %d slots)\n",
+        fprintf(out, "%s  page total avail_bytes: %.0f \n",
                 child_indent, agg.total_avail, (int)LeafNodesPerPage);
         if (opts->show_slots) {
           if (opts->expand)
@@ -518,14 +525,7 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
     return 0;
   }
 
-  if (opts->expand && !opts->has_range) {
-    fprintf(stderr,
-            "--expand needs --range A-B / --page N (refusing to expand "
-            "every printed page's full node array)\n");
-    fclose(out);
-    free(pages);
-    return 1;
-  }
+ 
 
   LongVec *children = build_fsm_children(total_pages);
 
