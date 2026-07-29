@@ -1,9 +1,9 @@
 /*
  * Flags:
  *   -H                 print a per-physical-page header inventory        
- *   -q                 suppress the summary block at the end
+ *   -q                 add summary block at the end
  *   --heap-range A-B   only process heap pages [A,B] 
- *   --heap-page N      dump only: status of exactly one heap page
+ *   --heap-page N      dump only: status of one heap page
  *   --expand           print one line per heap page 
  *   --only-not-visible dump: only print ranges where ALL_VISIBLE 
  *   --only-not-frozen  dump: only print ranges where ALL_FROZEN 
@@ -472,13 +472,12 @@ static void vm_usage(const char *prog) {
           "  %s diff [flags] <old_vm> <new_vm> <out.txt>\n"
           "flags:\n"
           "  -H                  per-physical-page header inventory\n"
-          "  -q                  suppress summary\n"
+          "  -q                  add summary\n"
           "  --heap-range A-B    restrict to heap pages [A,B] (default: "
           "whole file)\n"
-          "  --heap-page N       dump only: status of exactly one heap "
+          "  --heap-page N       dump only: status of one heap "
           "page\n"
-          "  --expand            one line per heap page (requires "
-          "--heap-range)\n"
+          "  --expand            one line per heap page \n"
           "  --only-not-visible  dump: only ranges missing ALL_VISIBLE\n"
           "  --only-not-frozen   dump: only ranges missing ALL_FROZEN\n"
           "  --only-changed      diff: only ranges whose status changed\n",
@@ -519,7 +518,7 @@ static void parse_vm_flags(int argc, char **argv, int start, VmOptions *opts,
             opts->show_headers = 1;
             break;
           case 'q':
-            opts->stats = 0;
+            opts->stats = 1;
             break;
           default:
             fprintf(stderr, "unknown flag -%c (ignored)\n", *c);
@@ -538,7 +537,7 @@ int vm_main(int argc, char **argv) {
   }
 
   VmOptions opts = {0};
-  opts.stats = 1;
+  opts.stats = 0;
   char *pos[8];
   int npos = 0;
 

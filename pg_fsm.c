@@ -5,7 +5,7 @@
  *   -i                internal array (dump only)
  *   -s                leaf slots (dump only)
  *   -a                all of the above
- *   -q                suppress summary
+ *   -q                add summary
  *   --range A-B       only print pages in [A,B] (children still traversed)
  *   --page N          shorthand for --range N-N
  *   --expand          full per-slot/per-node listing instead of compressed
@@ -95,9 +95,9 @@ typedef struct {
   uint16 pd_pagesize_version;
   int fp_next_slot;
   uint8 nodes[NodesPerPage];
-} PageInfo;
+} FsmPageInfo;
 
-static PageInfo *load_fsm(const char *path, long *out_total_pages) {
+static FsmPageInfo *load_fsm(const char *path, long *out_total_pages) {
   FILE *f = fopen(path, "rb");
   if (!f) {
     perror(path);
@@ -114,14 +114,14 @@ static PageInfo *load_fsm(const char *path, long *out_total_pages) {
     return NULL;
   }
 
-  PageInfo *pages = calloc(total_pages, sizeof(PageInfo));
+  FsmPageInfo *pages = calloc(total_pages, sizeof(FsmPageInfo));
   uint8 buf[BLCKSZ];
   for (long p = 0; p < total_pages; p++) {
     if (fread(buf, 1, BLCKSZ, f) != (size_t)BLCKSZ) {
       fprintf(stderr, "warning: short read at page %ld, treating as zero\n", p);
       memset(buf, 0, BLCKSZ);
     }
-    PageInfo *pi = &pages[p];
+    FsmPageInfo *pi = &pages[p];
     pi->page = p;
     classify_fsm_page(p, &pi->level, &pi->parent_id, &pi->logpageno);
     pi->allzero = fsm_page_is_all_zero(buf);
@@ -136,7 +136,6 @@ static PageInfo *load_fsm(const char *path, long *out_total_pages) {
     pi->pd_special = ph->pd_special;
     pi->pd_pagesize_version = ph->pd_pagesize_version;
 
-    /* FSMPageData starts exactly where the generic page header ends. */
     FSMPage fp = (FSMPage)PageGetContents((Page)buf);
     pi->fp_next_slot = fp->fp_next_slot;
     if (pi->valid)
@@ -282,7 +281,7 @@ static int in_avail_range(const FsmOptions *opts, unsigned avail_bytes) {
 }
 
 static void print_header_line(FILE *out, const char *indent,
-                              const PageInfo *pi) {
+                              const FsmPageInfo *pi) {
   fprintf(out,
           "%s  header: pd_lsn=%llX pd_checksum=%u pd_flags=0x%x "
           "pd_lower=%u pd_upper=%u pd_special=%u "
@@ -305,7 +304,7 @@ static const char *depth_label_indent(int level) {
 }
 
 static void print_internal_compressed(FILE *out, const char *indent,
-                                      const PageInfo *pi) {
+                                      const FsmPageInfo *pi) {
 ByteRunVec runs = compute_byte_runs(pi->nodes, NonLeafNodesPerPage);
   
   fprintf(out, "%s  internal fan-out (%d node(s), %ld run(s)):\n", indent,
@@ -329,7 +328,7 @@ ByteRunVec runs = compute_byte_runs(pi->nodes, NonLeafNodesPerPage);
 }
 
 static void print_internal_expanded(FILE *out, const char *indent,
-                                    const PageInfo *pi) {
+                                    const FsmPageInfo *pi) {
   fprintf(out, "%s  internal fan-out (%d node(s), expanded):\n", indent,
           (int)NonLeafNodesPerPage);
   for (int i = 0; i < NonLeafNodesPerPage; i++) {
@@ -341,7 +340,7 @@ static void print_internal_expanded(FILE *out, const char *indent,
 }
 
 static void print_leaf_compressed(FILE *out, const char *indent,
-                                  const PageInfo *pi, const FsmOptions *opts) {
+                                  const FsmPageInfo *pi, const FsmOptions *opts) {
   const uint8 *leaf = pi->nodes + NonLeafNodesPerPage;
   ByteRunVec runs = compute_byte_runs(leaf, LeafNodesPerPage);
   fprintf(out,
@@ -371,7 +370,7 @@ static void print_leaf_compressed(FILE *out, const char *indent,
 }
 
 static void print_leaf_expanded(FILE *out, const char *indent,
-                                const PageInfo *pi, const FsmOptions *opts) {
+                                const FsmPageInfo *pi, const FsmOptions *opts) {
   const uint8 *leaf = pi->nodes + NonLeafNodesPerPage;
   fprintf(out,
           "%s  leaf slots (%d, one per heap page starting at %ld, expanded)",
@@ -396,10 +395,10 @@ typedef struct {
   long total_slots;
 } DumpStats;
 
-static void dump_node(FILE *out, PageInfo *pages, LongVec *children,
+static void dump_node(FILE *out, FsmPageInfo *pages, LongVec *children,
                       long total_pages, long id, const char *prefix,
                       int is_last, const FsmOptions *opts, DumpStats *st) {
-  PageInfo *pi = &pages[id];
+  FsmPageInfo *pi = &pages[id];
   const char *branch = "\\-- ";
   const char *label = pi->level == 2   ? "ROOT"
                       : pi->level == 1 ? "INTERNAL"
@@ -474,7 +473,7 @@ static void dump_node(FILE *out, PageInfo *pages, LongVec *children,
               i == kids->count - 1, opts, st);
 }
 
-static void report_heap_page_lookup(FILE *out, PageInfo *pages,
+static void report_heap_page_lookup(FILE *out, FsmPageInfo *pages,
                                     long total_pages, const FsmOptions *opts) {
   long fsm_page, slot;
   heap_page_to_fsm_slot(opts->heap_page_query, &fsm_page, &slot);
@@ -487,7 +486,7 @@ static void report_heap_page_lookup(FILE *out, PageInfo *pages,
             total_pages);
     return;
   }
-  PageInfo *pi = &pages[fsm_page];
+  FsmPageInfo *pi = &pages[fsm_page];
   if (pi->allzero) {
     fprintf(out, " - page is empty (uninitialized, all-zero)\n");
     return;
@@ -504,7 +503,7 @@ static void report_heap_page_lookup(FILE *out, PageInfo *pages,
 static int do_fsm_dump(const char *in_path, const char *out_path,
                        const FsmOptions *opts) {
   long total_pages;
-  PageInfo *pages = load_fsm(in_path, &total_pages);
+  FsmPageInfo *pages = load_fsm(in_path, &total_pages);
   if (!pages) return 1;
 
   FILE *out = fopen(out_path, "w");
@@ -581,7 +580,7 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
 
 typedef enum { ST_SAME, ST_CHANGED, ST_ADDED, ST_REMOVED, ST_EMPTY } Status;
 
-static Status page_status(const PageInfo *a, const PageInfo *b) {
+static Status page_status(const FsmPageInfo *a, const FsmPageInfo *b) {
   int aOk = a && !a->allzero && a->valid;
   int bOk = b && !b->allzero && b->valid;
   if (!aOk && bOk) return ST_ADDED;
@@ -646,7 +645,7 @@ static int cmp_leafdelta_by_total_abs_desc(const void *pa, const void *pb) {
 }
 
 static void print_internal_diff(FILE *out, int do_print, const char *indent,
-                                const PageInfo *a, const PageInfo *b,
+                                const FsmPageInfo *a, const FsmPageInfo *b,
                                 const FsmOptions *opts, DiffStats *st) {
   ByteDiffRunVec runs =
       compute_byte_diff_runs(a->nodes, b->nodes, NonLeafNodesPerPage);
@@ -672,7 +671,7 @@ static void print_internal_diff(FILE *out, int do_print, const char *indent,
 }
 
 static void print_leaf_diff(FILE *out, int do_print, const char *indent,
-                            const PageInfo *a, const PageInfo *b,
+                            const FsmPageInfo *a, const FsmPageInfo *b,
                             const FsmOptions *opts, DiffStats *st,
                             LeafDeltaVec *deltas) {
   const uint8 *la = a->nodes + NonLeafNodesPerPage;
@@ -706,15 +705,15 @@ static void print_leaf_diff(FILE *out, int do_print, const char *indent,
   free(runs.items);
 }
 
-static void diff_node(FILE *out, PageInfo *A, long totalA, PageInfo *B,
+static void diff_node(FILE *out, FsmPageInfo *A, long totalA, FsmPageInfo *B,
                       long totalB, LongVec *children, long id,
                       const char *prefix, int is_last, const FsmOptions *opts,
                       DiffStats *st, LeafDeltaVec *deltas) {
-  PageInfo *a = id < totalA ? &A[id] : NULL;
-  PageInfo *b = id < totalB ? &B[id] : NULL;
+  FsmPageInfo *a = id < totalA ? &A[id] : NULL;
+  FsmPageInfo *b = id < totalB ? &B[id] : NULL;
   Status status = page_status(a, b);
   const char *branch = "\\-- ";
-  PageInfo *ref = (b && !b->allzero && b->valid) ? b : a;
+  FsmPageInfo *ref = (b && !b->allzero && b->valid) ? b : a;
   const char *label = ref ? (ref->level == 2   ? "ROOT"
                              : ref->level == 1 ? "INTERNAL"
                                                : "LEAF")
@@ -771,9 +770,9 @@ static void diff_node(FILE *out, PageInfo *A, long totalA, PageInfo *B,
 static int do_fsm_diff(const char *old_path, const char *new_path,
                    const char *out_path, const FsmOptions *opts) {
   long totalA, totalB;
-  PageInfo *A = load_fsm(old_path, &totalA);
+  FsmPageInfo *A = load_fsm(old_path, &totalA);
   if (!A) return 1;
-  PageInfo *B = load_fsm(new_path, &totalB);
+  FsmPageInfo *B = load_fsm(new_path, &totalB);
   if (!B) {
     free(A);
     return 1;
@@ -894,7 +893,7 @@ static void fsm_usage(const char *prog) {
           "array (dump only)\n"
           "  -s                leaf slots (dump only)        -a all of "
           "the above\n"
-          "  -q                suppress summary\n"
+          "  -q                add summary\n"
           "  --range A-B       only print pages in [A,B] (children still "
           "traversed)\n"
           "  --page N          shorthand for --range N-N\n"
@@ -958,7 +957,7 @@ static void parse_fsm_flags(int argc, char **argv, int start, FsmOptions *opts,
             opts->show_headers = opts->show_internal = opts->show_slots = 1;
             break;
           case 'q':
-            opts->stats = 0;
+            opts->stats = 1;
             break;
           default:
             fprintf(stderr, "unknown flag -%c (ignored)\n", *c);
@@ -977,7 +976,7 @@ int fsm_main(int argc, char **argv) {
   }
 
   FsmOptions opts = {0};
-  opts.stats = 1;
+  opts.stats = 0;
   char *pos[8];
   int npos = 0;
 
