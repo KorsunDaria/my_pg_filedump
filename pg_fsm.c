@@ -1,6 +1,5 @@
 /*
  *
- * Flags (short flags combinable, e.g. -Hs):
  *   -H                headers (incl. fp_next_slot)
  *   -i                internal array (dump only)
  *   -s                leaf slots (dump only)
@@ -8,11 +7,11 @@
  *   -q                add summary
  *   --range A-B       only print pages in [A,B] (children still traversed)
  *   --page N          shorthand for --range N-N
- *   --expand          full per-slot/per-node listing instead of compressed
+ *   --extra           full per-slot/per-node listing instead of compressed
  *                     ranges - requires --range/--page
  *   --heap-page N     dump only: locate heap page N in the FSM tree
- *   --min-avail N     dump -s only: filter leaf slot RANGES by avail_bytes
- *   --max-avail N
+ *   --min N     dump -s only: filter leaf slot RANGES by avail_bytes
+ *   --max N
  *   --only-changed    diff only
  *
  */
@@ -56,7 +55,7 @@ static int fsm_header_looks_valid(PageHeader ph) {
 static void classify_fsm_page(long p, int *level, long *parent_id,
                               long *logpageno) {
   if (p == 0) {
-    *level = 2;
+    *level = 0;
     *parent_id = -1;
     *logpageno = 0;
     return;
@@ -66,7 +65,7 @@ static void classify_fsm_page(long p, int *level, long *parent_id,
   long group = idx / group_size;
   long offset = idx % group_size;
 
-  *level = (offset == 0) ? 1 : 0;
+  *level = (offset == 0) ? 1 : 2;
   *parent_id = (*level == 1) ? 0 : (1 + group * group_size);
   *logpageno = (*level == 1) ? group : (group * LeafNodesPerPage + offset - 1);
 }
@@ -305,48 +304,59 @@ static const char *depth_label_indent(int level) {
 
 static void print_internal_compressed(FILE *out, const char *indent,
                                       const FsmPageInfo *pi) {
-ByteRunVec runs = compute_byte_runs(pi->nodes, NonLeafNodesPerPage);
-  
-  fprintf(out, "%s  internal fan-out (%d node(s), %ld run(s)):\n", indent,
-          (int)NonLeafNodesPerPage, runs.count);
-
-  for (long i = 0; i < runs.count; i++) {
-    const ByteRun *r = &runs.items[i];
-    char range_str[32];
-
-    /* Формируем диапазон в скобках [A-B] или [A] */
-    if (r->start == r->end)
-      snprintf(range_str, sizeof(range_str), "[%ld]", r->start);
-    else
-      snprintf(range_str, sizeof(range_str), "[%ld-%ld]", r->start, r->end);
-
-    /* Выводим с фиксированным отступом колонки в 20 символов */
-    fprintf(out, "%s    %-20s %3u\n", indent, range_str, r->value);
+  struct { const char *label; long start, len; } sec[2] = {
+    {"NONLEAF", 0, NonLeafNodesPerPage},
+    {"LEAF", NonLeafNodesPerPage, LeafNodesPerPage},
+  };
+ 
+  for (int s = 0; s < 2; s++) {
+    ByteRunVec runs = compute_byte_runs(pi->nodes + sec[s].start, sec[s].len);
+    fprintf(out, "%s  %s (%ld nodes):\n", indent, sec[s].label,
+            sec[s].len);
+ 
+    for (long i = 0; i < runs.count; i++) {
+      const ByteRun *r = &runs.items[i];
+      char range_str[32];
+ 
+      if (r->start == r->end)
+        snprintf(range_str, sizeof(range_str), "[%ld]", r->start);
+      else
+        snprintf(range_str, sizeof(range_str), "[%ld-%ld]", r->start, r->end);
+ 
+      fprintf(out, "%s      %-20s %3u\n", indent, range_str, r->value);
+    }
+ 
+    free(runs.items);
   }
-
-  free(runs.items);
 }
-
+ 
 static void print_internal_expanded(FILE *out, const char *indent,
                                     const FsmPageInfo *pi) {
-  fprintf(out, "%s  internal fan-out (%d node(s), expanded):\n", indent,
-          (int)NonLeafNodesPerPage);
-  for (int i = 0; i < NonLeafNodesPerPage; i++) {
-    if (i % 32 == 0) fprintf(out, "%s    [%4d] ", indent, i);
-    fprintf(out, "%3u ", pi->nodes[i]);
-    if (i % 32 == 31) fprintf(out, "\n");
+  struct { const char *label; long start, len; } sec[2] = {
+    {"NONLEAF", 0, NonLeafNodesPerPage},
+    {"LEAF", NonLeafNodesPerPage, LeafNodesPerPage},
+  };
+ 
+  for (int s = 0; s < 2; s++) {
+    fprintf(out, "%s  %s (%ld node(s), expanded):\n", indent, sec[s].label,
+            sec[s].len);
+    for (long i = 0; i < sec[s].len; i++) {
+      if (i % 32 == 0) fprintf(out, "%s      [%4ld] ", indent, i);
+      fprintf(out, "%3u ", pi->nodes[sec[s].start + i]);
+      if (i % 32 == 31) fprintf(out, "\n");
+    }
+    if (sec[s].len % 32 != 0) fprintf(out, "\n");
   }
-  if (NonLeafNodesPerPage % 32 != 0) fprintf(out, "\n");
 }
+ 
 
 static void print_leaf_compressed(FILE *out, const char *indent,
                                   const FsmPageInfo *pi, const FsmOptions *opts) {
   const uint8 *leaf = pi->nodes + NonLeafNodesPerPage;
   ByteRunVec runs = compute_byte_runs(leaf, LeafNodesPerPage);
   fprintf(out,
-          "%s  leaf slots (%d, one per heap page starting at %ld, %ld run(s))",
-          indent, (int)LeafNodesPerPage, pi->logpageno * LeafNodesPerPage,
-          runs.count);
+          "%s  leaf slots (%d, starting at %ld)",
+          indent, (int)LeafNodesPerPage, pi->logpageno * LeafNodesPerPage);
   if (opts->has_min_avail || opts->has_max_avail)
     fprintf(out, " [filtered by avail_bytes]");
   fprintf(out, ":\n");
@@ -400,7 +410,7 @@ static void dump_node(FILE *out, FsmPageInfo *pages, LongVec *children,
                       int is_last, const FsmOptions *opts, DumpStats *st) {
   FsmPageInfo *pi = &pages[id];
   const char *branch = "\\-- ";
-  const char *label = pi->level == 2   ? "ROOT"
+  const char *label = pi->level == 0   ? "ROOT"
                       : pi->level == 1 ? "INTERNAL"
                                        : "LEAF";
   int show = in_page_range(opts, id);
@@ -408,7 +418,7 @@ static void dump_node(FILE *out, FsmPageInfo *pages, LongVec *children,
   char child_indent[512];
   snprintf(child_indent, sizeof(child_indent), "%s    ", prefix);
 
-  if (pi->level == 2)
+  if (pi->level == 0)
     st->n_root++;
   else if (pi->level == 1)
     st->n_internal++;
@@ -440,7 +450,7 @@ static void dump_node(FILE *out, FsmPageInfo *pages, LongVec *children,
           print_internal_compressed(out, child_indent, pi);
       }
     }
-    if (pi->level == 0) {
+    if (pi->level == 2) {
       const uint8 *leaf = pi->nodes + NonLeafNodesPerPage;
       LeafPageAgg agg = compute_leaf_agg(leaf, LeafNodesPerPage);
       st->total_avail += agg.total_avail;
@@ -454,7 +464,7 @@ static void dump_node(FILE *out, FsmPageInfo *pages, LongVec *children,
         fprintf(out, "%s  page max: category=%u (%u bytes) at slot %ld\n",
                 child_indent, agg.max_cat, cat_to_bytes(agg.max_cat),
                 agg.max_slot);
-        fprintf(out, "%s  Free space on page: %.0f (sum over %d slots)\n",
+        fprintf(out, "%s  Free space on page: %.0f (sum over %d slots)\n\n",
                 child_indent, agg.total_avail, (int)LeafNodesPerPage);
         if (opts->show_slots) {
           if (opts->expand)
@@ -529,10 +539,9 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
 
   fprintf(out, "=== pg_fsm dump: %s ===\n", in_path);
   fprintf(out,
-          "file size: %ld bytes, total pages: %ld (%d bytes/page, "
-          "%d nodes/page = %d internal + %d leaf)\n",
-          total_pages * BLCKSZ, total_pages, BLCKSZ, (int)NodesPerPage,
-          (int)NonLeafNodesPerPage, (int)LeafNodesPerPage);
+          "file size: %ld bytes, total pages: %ld (%d bytes/page)\n",
+          total_pages * BLCKSZ, total_pages, BLCKSZ);
+
   fprintf(out, "flags: headers=%s internal=%s slots=%s expand=%s\n",
           opts->show_headers ? "on" : "off", opts->show_internal ? "on" : "off",
           opts->show_slots ? "on" : "off", opts->expand ? "on" : "off");
@@ -559,16 +568,11 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
             st.n_invalid);
     fprintf(
         out,
-        "global max free-space category: %u (%u bytes), page %ld slot %ld\n",
+        "\nMax free-space category: %u (%u bytes), page %ld slot %ld\n",
         st.global_max_cat, cat_to_bytes(st.global_max_cat),
         st.global_max_cat_page, st.global_max_cat_slot);
-    if (st.total_slots > 0)
-      fprintf(out, "average avail_bytes over all leaf slots: %.1f\n",
-              st.total_avail / st.total_slots);
-    fprintf(out, "total avail_bytes across all leaf pages: %.0f\n",
+    fprintf(out, "\nTotal avail_bytes : %.0f\n",
             st.total_avail);
-    fprintf(out, "total leaf slots (== heap pages covered): %ld\n",
-            st.total_slots);
   }
 
   fclose(out);
@@ -714,7 +718,7 @@ static void diff_node(FILE *out, FsmPageInfo *A, long totalA, FsmPageInfo *B,
   Status status = page_status(a, b);
   const char *branch = "\\-- ";
   FsmPageInfo *ref = (b && !b->allzero && b->valid) ? b : a;
-  const char *label = ref ? (ref->level == 2   ? "ROOT"
+  const char *label = ref ? (ref->level == 0   ? "ROOT"
                              : ref->level == 1 ? "INTERNAL"
                                                : "LEAF")
                           : "?";
@@ -778,14 +782,13 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
     return 1;
   }
 
-  if (opts->expand && !opts->has_range) {
-    fprintf(stderr,
-            "--expand needs --range A-B / --page N (refusing to expand "
-            "every printed page's full node array)\n");
-    free(A);
-    free(B);
-    return 1;
-  }
+  // if (opts->expand && !opts->has_range) {
+  //   fprintf(stderr,
+  //           "--extra needs --range A-B / --page N ");
+  //   free(A);
+  //   free(B);
+  //   return 1;
+  // }
 
   long total_max = totalA > totalB ? totalA : totalB;
   LongVec *children = build_fsm_children(total_max);
@@ -897,13 +900,13 @@ static void fsm_usage(const char *prog) {
           "  --range A-B       only print pages in [A,B] (children still "
           "traversed)\n"
           "  --page N          shorthand for --range N-N\n"
-          "  --expand          full per-slot/per-node listing instead of "
+          "  --extra          full per-slot/per-node listing instead of "
           "compressed ranges (requires --range/--page)\n"
           "  --heap-page N     dump only: locate heap page N in the FSM "
           "tree\n"
-          "  --min-avail N     dump -s only: filter leaf slot ranges by "
+          "  --min N     dump -s only: filter leaf slot ranges by "
           "avail_bytes\n"
-          "  --max-avail N\n"
+          "  --max N\n"
           "  --only-changed    diff only: hide SAME/empty subtrees and "
           "unchanged runs\n",
           prog, prog);
@@ -928,15 +931,15 @@ static void parse_fsm_flags(int argc, char **argv, int start, FsmOptions *opts,
     } else if (strcmp(a, "--page") == 0 && i + 1 < argc) {
       opts->has_range = 1;
       opts->range_lo = opts->range_hi = atol(argv[++i]);
-    } else if (strcmp(a, "--expand") == 0) {
+    } else if (strcmp(a, "--extra") == 0) {
       opts->expand = 1;
     } else if (strcmp(a, "--heap-page") == 0 && i + 1 < argc) {
       opts->has_heap_page = 1;
       opts->heap_page_query = atol(argv[++i]);
-    } else if (strcmp(a, "--min-avail") == 0 && i + 1 < argc) {
+    } else if (strcmp(a, "--min") == 0 && i + 1 < argc) {
       opts->has_min_avail = 1;
       opts->min_avail = atol(argv[++i]);
-    } else if (strcmp(a, "--max-avail") == 0 && i + 1 < argc) {
+    } else if (strcmp(a, "--max") == 0 && i + 1 < argc) {
       opts->has_max_avail = 1;
       opts->max_avail = atol(argv[++i]);
     } else if (strcmp(a, "--only-changed") == 0) {

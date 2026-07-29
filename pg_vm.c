@@ -1,10 +1,9 @@
 /*
- * Flags:
- *   -H                 print a per-physical-page header inventory        
+ *   -H                 print header        
  *   -q                 add summary block at the end
- *   --heap-range A-B   only process heap pages [A,B] 
+ *   --heap-range A-B   heap pages [A,B] 
  *   --heap-page N      dump only: status of one heap page
- *   --expand           print one line per heap page 
+ *   --extra            print one line per heap page 
  *   --only-not-visible dump: only print ranges where ALL_VISIBLE 
  *   --only-not-frozen  dump: only print ranges where ALL_FROZEN 
  *   --only-changed     diff: 
@@ -329,7 +328,7 @@ static int do_vm_dump(const char *in_path, const char *out_path,
 
   if (opts->expand && !opts->has_heap_range) {
     fprintf(stderr,
-            "--expand needs --heap-range A-B (refusing to print every heap "
+            "--extraneeds --heap-range A-B (refusing to print every heap "
             "page of the whole file)\n");
     fclose(out);
     free(pages);
@@ -341,17 +340,17 @@ static int do_vm_dump(const char *in_path, const char *out_path,
 
   fprintf(out, "=== pg_vm dump: %s ===\n", in_path);
   fprintf(out,
-          "file size: %ld bytes, total pages: %ld, %d heap page(s)/vm page, "
+          "file size: %ld bytes, total pages: %ld, "
           "%d bytes/page\n",
-          total_pages * BLCKSZ, total_pages, HEAPBLOCKS_PER_PAGE, BLCKSZ);
+          total_pages * BLCKSZ, total_pages, BLCKSZ);
   fprintf(out, "heap page range covered: [%ld, %ld]\n", from, to);
   fprintf(out, "\n");
 
   if (opts->show_headers) print_page_inventory(out, pages, total_pages);
 
   fprintf(out, "\n-- heap page status%s --\n",
-          opts->expand ? " (expanded, one line per page)"
-                       : " (run-length compressed)");
+          opts->expand ? " (expanded)"
+                       : " (compressed)");
   if (opts->expand) {
     print_expanded(out, pages, total_pages, from, to, opts);
   } else {
@@ -369,9 +368,9 @@ static int do_vm_dump(const char *in_path, const char *out_path,
               "\n--------------------------------------------------------------"
               "\nSUMMARY\n--------------------------------------------------"
               "------------\n");
-      fprintf(out, "heap pages in range: %ld, compressed into %ld run(s)\n",
-              to - from + 1, runs.count);
-      fprintf(out, "all-visible: %ld  all-frozen: %ld  corrupt page(s): %ld\n",
+      fprintf(out, "heap pages in range: %ld\n",
+              to - from + 1);
+      fprintf(out, "all-visible: %ld  all-frozen: %ld  error page(s): %ld\n",
               visible, frozen, corrupt_runs);
     }
     free(runs.items);
@@ -404,7 +403,7 @@ static int do_vm_diff(const char *old_path, const char *new_path,
 
   if (opts->expand && !opts->has_heap_range) {
     fprintf(stderr,
-            "--expand needs --heap-range A-B (refusing to print every heap "
+            "--extraneeds --heap-range A-B (refusing to print every heap "
             "page of the whole file)\n");
     fclose(out);
     free(A);
@@ -450,9 +449,9 @@ static int do_vm_diff(const char *old_path, const char *new_path,
       fprintf(out, "heap pages in range: %ld, compressed into %ld run(s)\n",
               to - from + 1, runs.count);
       fprintf(out, "changed heap pages: %ld\n", changed_pages);
-      fprintf(out, "gained all-visible: %ld  lost all-visible: %ld\n",
+      fprintf(out, "+ all-visible: %ld  - all-visible: %ld\n",
               gained_visible, lost_visible);
-      fprintf(out, "gained all-frozen: %ld  lost all-frozen: %ld\n",
+      fprintf(out, "+ all-frozen: %ld  - all-frozen: %ld\n",
               gained_frozen, lost_frozen);
     }
     free(runs.items);
@@ -473,11 +472,10 @@ static void vm_usage(const char *prog) {
           "flags:\n"
           "  -H                  per-physical-page header inventory\n"
           "  -q                  add summary\n"
-          "  --heap-range A-B    restrict to heap pages [A,B] (default: "
-          "whole file)\n"
+          "  --heap-range A-B    process heap pages [A,B]\n"
           "  --heap-page N       dump only: status of one heap "
           "page\n"
-          "  --expand            one line per heap page \n"
+          "  --extra             one line per heap page \n"
           "  --only-not-visible  dump: only ranges missing ALL_VISIBLE\n"
           "  --only-not-frozen   dump: only ranges missing ALL_FROZEN\n"
           "  --only-changed      diff: only ranges whose status changed\n",
