@@ -6,6 +6,10 @@
  *   --extra            print one line per heap page 
  *   --only-not-visible dump: only print ranges where ALL_VISIBLE 
  *   --only-not-frozen  dump: only print ranges where ALL_FROZEN 
+ * 
+ *   --notF
+ *   --notV
+ * 
  *   --only-changed     diff: 
  */
 
@@ -326,14 +330,14 @@ static int do_vm_dump(const char *in_path, const char *out_path,
     return 0;
   }
 
-  if (opts->expand && !opts->has_heap_range) {
-    fprintf(stderr,
-            "--extraneeds --heap-range A-B (refusing to print every heap "
-            "page of the whole file)\n");
-    fclose(out);
-    free(pages);
-    return 1;
-  }
+  // if (opts->expand && !opts->has_heap_range) {
+  //   fprintf(stderr,
+  //           "--extra needs --heap-range A-B (refusing to print every heap "
+  //           "page of the whole file)\n");
+  //   fclose(out);
+  //   free(pages);
+  //   return 1;
+  // }
 
   long from = opts->has_heap_range ? opts->heap_from : 0;
   long to = opts->has_heap_range ? opts->heap_to : default_heap_to(total_pages);
@@ -401,15 +405,15 @@ static int do_vm_diff(const char *old_path, const char *new_path,
     return 1;
   }
 
-  if (opts->expand && !opts->has_heap_range) {
-    fprintf(stderr,
-            "--extraneeds --heap-range A-B (refusing to print every heap "
-            "page of the whole file)\n");
-    fclose(out);
-    free(A);
-    free(B);
-    return 1;
-  }
+  // if (opts->expand && !opts->has_heap_range) {
+  //   fprintf(stderr,
+  //           "--extra needs --heap-range A-B (refusing to print every heap "
+  //           "page of the whole file)\n");
+  //   fclose(out);
+  //   free(A);
+  //   free(B);
+  //   return 1;
+  // }
 
   long total_max = totalA > totalB ? totalA : totalB;
   long from = opts->has_heap_range ? opts->heap_from : 0;
@@ -501,11 +505,15 @@ static void parse_vm_flags(int argc, char **argv, int start, VmOptions *opts,
     } else if (strcmp(a, "--heap-page") == 0 && i + 1 < argc) {
       opts->has_heap_page = 1;
       opts->heap_page_query = atol(argv[++i]);
-    } else if (strcmp(a, "--expand") == 0) {
+    } else if (strcmp(a, "--extra") == 0) {
       opts->expand = 1;
     } else if (strcmp(a, "--only-not-visible") == 0) {
       opts->only_not_visible = 1;
+    } else if (strcmp(a, "--notV") == 0) {
+      opts->only_not_visible = 1;
     } else if (strcmp(a, "--only-not-frozen") == 0) {
+      opts->only_not_frozen = 1;
+      } else if (strcmp(a, "--notF") == 0) {
       opts->only_not_frozen = 1;
     } else if (strcmp(a, "--only-changed") == 0) {
       opts->only_changed = 1;
