@@ -89,15 +89,47 @@ static HeaderStatus fsm_header_status(PageHeader page_header, const char **reaso
   return HEADER_OK;
 }
 
-static int vm_header_looks_valid(PageHeader page_header) {
-  uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
-  uint16 version = page_header->pd_pagesize_version & 0x00FF;
-  if (pagesize != BLCKSZ) return 0;
-  if (version == 0 || version > PG_PAGE_LAYOUT_VERSION) return 0;
-  if (page_header->pd_special > BLCKSZ) return 0;
-  if (page_header->pd_lower > page_header->pd_upper) return 0;
-  if (page_header->pd_upper > page_header->pd_special) return 0;
-  return 1;
+// static int vm_header_looks_valid(PageHeader page_header) {
+//   uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
+//   uint16 version = page_header->pd_pagesize_version & 0x00FF;
+//   if (pagesize != BLCKSZ) return 0;
+//   if (version == 0 || version > PG_PAGE_LAYOUT_VERSION) return 0;
+//   if (page_header->pd_special > BLCKSZ) return 0;
+//   if (page_header->pd_lower > page_header->pd_upper) return 0;
+//   if (page_header->pd_upper > page_header->pd_special) return 0;
+//   return 1;
+// }
+
+static void fill_fsm_page_info(const uint8 *buf, long page_index,
+                               VmPageInfo *page_info) {
+                               
+  page_info->page = page_index;
+  page_info->page = page_index;
+  page_info->allzero = vm_page_is_all_zero(buf);
+
+  PageHeader page_header = (PageHeader)buf;
+  const char *reason = NULL;
+  page_info->header_status = page_info->allzero
+                                ? HEADER_OK
+                                : fsm_header_status(page_header, &reason);
+  page_info->invalid_reason = reason;
+  page_info->valid =
+    !page_info->allzero && page_info->header_status == HEADER_OK;
+
+  page_info->pd_flags = page_header->pd_flags;
+  page_info->pd_checksum = page_header->pd_checksum;
+  page_info->lsn = PageGetLSN((Page)buf);
+  page_info->pd_lower = page_header->pd_lower;
+  page_info->pd_upper = page_header->pd_upper;
+  page_info->pd_special = page_header->pd_special;
+  page_info->pd_pagesize_version = page_header->pd_pagesize_version;
+
+  if (page_info->allzero || page_info->valid)
+    memcpy(page_info->bitmap, PageGetContents((Page)buf), MAP_SIZE);
+  else
+    memset(page_info->bitmap, 0, MAP_SIZE); 
+
+
 }
 
 static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
@@ -119,36 +151,12 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
 
   VmPageInfo *pages = calloc(total_pages, sizeof(VmPageInfo));
   uint8 buf[BLCKSZ];
-  for (long p = 0; p < total_pages; p++) {
+  for (long page_index = 0; page_index < total_pages; page_index++) {
     if (fread(buf, 1, BLCKSZ, f) != (size_t)BLCKSZ) {
-      fprintf(stderr, "warning: short read at page %ld, treating as zero\n", p);
+      fprintf(stderr, "warning: short read at page %ld, treating as zero\n", page_index);
       memset(buf, 0, BLCKSZ);
     }
-    VmPageInfo *page_info = &pages[p];
-    page_info->page = p;
-    page_info->allzero = vm_page_is_all_zero(buf);
-
-    PageHeader page_header = (PageHeader)buf;
-    const char *reason = NULL;
-    page_info->header_status = page_info->allzero
-                                  ? HEADER_OK
-                                  : fsm_header_status(page_header, &reason);
-    page_info->invalid_reason = reason;
-    page_info->valid =
-      !page_info->allzero && page_info->header_status == HEADER_OK;
-
-    page_info->pd_flags = page_header->pd_flags;
-    page_info->pd_checksum = page_header->pd_checksum;
-    page_info->lsn = PageGetLSN((Page)buf);
-    page_info->pd_lower = page_header->pd_lower;
-    page_info->pd_upper = page_header->pd_upper;
-    page_info->pd_special = page_header->pd_special;
-    page_info->pd_pagesize_version = page_header->pd_pagesize_version;
-
-    if (page_info->allzero || page_info->valid)
-      memcpy(page_info->bitmap, PageGetContents((Page)buf), MAP_SIZE);
-    else
-      memset(page_info->bitmap, 0, MAP_SIZE); 
+    fill_fsm_page_info(buf, page_index, &pages[page_index]);
   }
   fclose(f);
   *out_total_pages = total_pages;
@@ -179,7 +187,7 @@ typedef struct {
   long count, cap;
 } VmRunVec;
 
-static void run_push(VmRunVec *v, long start, long end, int status) {
+static void compressed_push(VmRunVec *v, long start, long end, int status) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 16;
     v->items = realloc(v->items, v->cap * sizeof(VmRun));
@@ -187,23 +195,23 @@ static void run_push(VmRunVec *v, long start, long end, int status) {
   v->items[v->count++] = (VmRun){start, end, status};
 }
 
-static VmRunVec compute_runs(const VmPageInfo *pages, long total_pages,
+static VmRunVec compute_compressed(const VmPageInfo *pages, long total_pages,
                              long from, long to) {
-  VmRunVec runs = {0};
-  if (to < from) return runs;
+  VmRunVec compressed = {0};
+  if (to < from) return compressed;
 
   long run_start = from;
   int run_status = heap_page_status(pages, total_pages, from);
   for (long hp = from + 1; hp <= to; hp++) {
-    int st = heap_page_status(pages, total_pages, hp);
-    if (st != run_status) {
-      run_push(&runs, run_start, hp - 1, run_status);
+    int status = heap_page_status(pages, total_pages, hp);
+    if (status != run_status) {
+      compressed_push(&compressed, run_start, hp - 1, run_status);
       run_start = hp;
-      run_status = st;
+      run_status = status;
     }
   }
-  run_push(&runs, run_start, to, run_status);
-  return runs;
+  compressed_push(&compressed, run_start, to, run_status);
+  return compressed;
 }
 
 typedef struct {
@@ -216,7 +224,7 @@ typedef struct {
   long count, cap;
 } VmDiffRunVec;
 
-static void diffrun_push(VmDiffRunVec *v, long start, long end, int os,
+static void diffcompressed_push(VmDiffRunVec *v, long start, long end, int os,
                          int ns) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 16;
@@ -225,11 +233,11 @@ static void diffrun_push(VmDiffRunVec *v, long start, long end, int os,
   v->items[v->count++] = (VmDiffRun){start, end, os, ns};
 }
 
-static VmDiffRunVec compute_diff_runs(const VmPageInfo *A, long totalA,
+static VmDiffRunVec compute_diff_compressed(const VmPageInfo *A, long totalA,
                                       const VmPageInfo *B, long totalB,
                                       long from, long to) {
-  VmDiffRunVec runs = {0};
-  if (to < from) return runs;
+  VmDiffRunVec compressed = {0};
+  if (to < from) return compressed;
 
   long run_start = from;
   int old_st = heap_page_status(A, totalA, from);
@@ -238,14 +246,14 @@ static VmDiffRunVec compute_diff_runs(const VmPageInfo *A, long totalA,
     int os = heap_page_status(A, totalA, hp);
     int ns = heap_page_status(B, totalB, hp);
     if (os != old_st || ns != new_st) {
-      diffrun_push(&runs, run_start, hp - 1, old_st, new_st);
+      diffcompressed_push(&compressed, run_start, hp - 1, old_st, new_st);
       run_start = hp;
       old_st = os;
       new_st = ns;
     }
   }
-  diffrun_push(&runs, run_start, to, old_st, new_st);
-  return runs;
+  diffcompressed_push(&compressed, run_start, to, old_st, new_st);
+  return compressed;
 }
 
 static const char *status_label(int status) {
@@ -277,30 +285,30 @@ static int status_has_frozen(int status) {
 static void print_page_headers(FILE *out, const VmPageInfo *pages,
                                  long total_pages) {
   fprintf(out, "\n-- page_headerysical page headers (-H) --\n");
-  for (long p = 0; p < total_pages; p++) {
-    const VmPageInfo *page_info = &pages[p];
+  for (long page_index = 0; page_index < total_pages; page_index++) {
+    const VmPageInfo *page_info = &pages[page_index];
     if (page_info->allzero) {
-      fprintf(out, "vm page %ld: empty (all-zero)\n", p);
+      fprintf(out, "vm page %ld: empty (all-zero)\n", page_index);
       continue;
     }
     if (page_info->header_status == HEADER_INVALID) {
-      fprintf(out, "vm page %ld: header valid: no (%s)\n", p, page_info->invalid_reason);
+      fprintf(out, "vm page %ld: header valid: no (%s)\n", page_index, page_info->invalid_reason);
       continue;
     }
     fprintf(out,
             "vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
             "special=%u\n",
-            p, (unsigned long long)page_info->lsn, page_info->pd_checksum, page_info->pd_flags,
+            page_index, (unsigned long long)page_info->lsn, page_info->pd_checksum, page_info->pd_flags,
             page_info->pd_lower, page_info->pd_upper, page_info->pd_special);
 
     }
 }
 
-static void print_runs(FILE *out, const VmRunVec *runs, const VmOptions *opts) {
-  for (long i = 0; i < runs->count; i++) {
-    const VmRun *r = &runs->items[i];
-    if (opts->only_not_visible && status_has_visible(r->status)) continue;
-    if (opts->only_not_frozen && status_has_frozen(r->status)) continue;
+static void print_compressed(FILE *out, const VmRunVec *compressed, const VmOptions *options) {
+  for (long i = 0; i < compressed->count; i++) {
+    const VmRun *r = &compressed->items[i];
+    if (options->only_not_visible && status_has_visible(r->status)) continue;
+    if (options->only_not_frozen && status_has_frozen(r->status)) continue;
     if (r->heap_start == r->heap_end)
       fprintf(out, "heap page %8ld           : %s\n", r->heap_start,
               status_label(r->status));
@@ -312,20 +320,20 @@ static void print_runs(FILE *out, const VmRunVec *runs, const VmOptions *opts) {
 }
 
 static void print_expanded(FILE *out, const VmPageInfo *pages, long total_pages,
-                           long from, long to, const VmOptions *opts) {
+                           long from, long to, const VmOptions *options) {
   for (long hp = from; hp <= to; hp++) {
-    int st = heap_page_status(pages, total_pages, hp);
-    if (opts->only_not_visible && status_has_visible(st)) continue;
-    if (opts->only_not_frozen && status_has_frozen(st)) continue;
-    fprintf(out, "heap page %8ld: %s\n", hp, status_label(st));
+    int status = heap_page_status(pages, total_pages, hp);
+    if (options->only_not_visible && status_has_visible(status)) continue;
+    if (options->only_not_frozen && status_has_frozen(status)) continue;
+    fprintf(out, "heap page %8ld: %s\n", hp, status_label(status));
   }
 }
 
-static void print_diff_runs(FILE *out, const VmDiffRunVec *runs,
-                            const VmOptions *opts) {
-  for (long i = 0; i < runs->count; i++) {
-    const VmDiffRun *r = &runs->items[i];
-    if (opts->only_changed && r->old_status == r->new_status) continue;
+static void print_diff_compressed(FILE *out, const VmDiffRunVec *compressed,
+                            const VmOptions *options) {
+  for (long i = 0; i < compressed->count; i++) {
+    const VmDiffRun *r = &compressed->items[i];
+    if (options->only_changed && r->old_status == r->new_status) continue;
     const char *tag = r->old_status == r->new_status ? "same" : "CHANGED";
     if (r->heap_start == r->heap_end)
       fprintf(out, "heap page %8ld           : %s -> %s  [%s]\n", r->heap_start,
@@ -340,11 +348,11 @@ static void print_diff_runs(FILE *out, const VmDiffRunVec *runs,
 
 static void print_expanded_diff(FILE *out, const VmPageInfo *A, long totalA,
                                 const VmPageInfo *B, long totalB, long from,
-                                long to, const VmOptions *opts) {
+                                long to, const VmOptions *options) {
   for (long hp = from; hp <= to; hp++) {
     int os = heap_page_status(A, totalA, hp);
     int ns = heap_page_status(B, totalB, hp);
-    if (opts->only_changed && os == ns) continue;
+    if (options->only_changed && os == ns) continue;
     fprintf(out, "heap page %8ld: %s -> %s  [%s]\n", hp, status_label(os),
             status_label(ns), os == ns ? "same" : "CHANGED");
   }
@@ -355,7 +363,7 @@ static long default_heap_to(long total_pages) {
 }
 
 static int do_vm_dump(const char *in_path, const char *out_path,
-                       const VmOptions *opts) {
+                       const VmOptions *options) {
   long total_pages;
   VmPageInfo *pages = load_vm(in_path, &total_pages);
   if (!pages) return 1;
@@ -367,12 +375,12 @@ static int do_vm_dump(const char *in_path, const char *out_path,
     return 1;
   }
 
-  if (opts->has_heap_page) {
-    int st = heap_page_status(pages, total_pages, opts->heap_page_query);
+  if (options->has_heap_page) {
+    int status = heap_page_status(pages, total_pages, options->heap_page_query);
     fprintf(out, "=== pg_vm dump: %s (--heap-page %ld lookup) ===\n", in_path,
-            opts->heap_page_query);
-    fprintf(out, "heap page %ld: %s\n", opts->heap_page_query,
-            status_label(st));
+            options->heap_page_query);
+    fprintf(out, "heap page %ld: %s\n", options->heap_page_query,
+            status_label(status));
     fclose(out);
     free(pages);
     fprintf(stderr, "wrote %s\n", out_path);
@@ -380,8 +388,8 @@ static int do_vm_dump(const char *in_path, const char *out_path,
   }
 
 
-  long from = opts->has_heap_range ? opts->heap_from : 0;
-  long to = opts->has_heap_range ? opts->heap_to : default_heap_to(total_pages);
+  long from = options->has_heap_range ? options->heap_from : 0;
+  long to = options->has_heap_range ? options->heap_to : default_heap_to(total_pages);
 
   fprintf(out, "=== pg_vm dump: %s ===\n", in_path);
   fprintf(out,
@@ -391,23 +399,23 @@ static int do_vm_dump(const char *in_path, const char *out_path,
   fprintf(out, "heap page range covered: [%ld, %ld]\n", from, to);
   fprintf(out, "\n");
 
-  if (opts->show_headers) print_page_headers(out, pages, total_pages);
+  if (options->show_headers) print_page_headers(out, pages, total_pages);
 
   fprintf(out, "\n-- heap page status%s --\n",
-          opts->expand ? " (expanded)"
+          options->expand ? " (expanded)"
                        : " (compressed)");
-  if (opts->expand) {
-    print_expanded(out, pages, total_pages, from, to, opts);
+  if (options->expand) {
+    print_expanded(out, pages, total_pages, from, to, options);
   } else {
-    VmRunVec runs = compute_runs(pages, total_pages, from, to);
-    print_runs(out, &runs, opts);
-    if (opts->stats) {
-      long visible = 0, frozen = 0, corrupt_runs = 0;
-      for (long i = 0; i < runs.count; i++) {
-        long n = runs.items[i].heap_end - runs.items[i].heap_start + 1;
-        if (status_has_visible(runs.items[i].status)) visible += n;
-        if (status_has_frozen(runs.items[i].status)) frozen += n;
-        if (runs.items[i].status == VM_STATUS_CORRUPT) corrupt_runs++;
+    VmRunVec compressed = compute_compressed(pages, total_pages, from, to);
+    print_compressed(out, &compressed, options);
+    if (options->stats) {
+      long visible = 0, frozen = 0, corrupt_compressed = 0;
+      for (long i = 0; i < compressed.count; i++) {
+        long n = compressed.items[i].heap_end - compressed.items[i].heap_start + 1;
+        if (status_has_visible(compressed.items[i].status)) visible += n;
+        if (status_has_frozen(compressed.items[i].status)) frozen += n;
+        if (compressed.items[i].status == VM_STATUS_CORRUPT) corrupt_compressed++;
       }
       fprintf(out,
               "\n--------------------------------------------------------------"
@@ -416,9 +424,9 @@ static int do_vm_dump(const char *in_path, const char *out_path,
       fprintf(out, "heap pages in range: %ld\n",
               to - from + 1);
       fprintf(out, "all-visible: %ld  all-frozen: %ld  error page(s): %ld\n",
-              visible, frozen, corrupt_runs);
+              visible, frozen, corrupt_compressed);
     }
-    free(runs.items);
+    free(compressed.items);
   }
 
   fclose(out);
@@ -428,7 +436,7 @@ static int do_vm_dump(const char *in_path, const char *out_path,
 }
 
 static int do_vm_diff(const char *old_path, const char *new_path,
-                   const char *out_path, const VmOptions *opts) {
+                   const char *out_path, const VmOptions *options) {
   long totalA, totalB;
   VmPageInfo *A = load_vm(old_path, &totalA);
   if (!A) return 1;
@@ -448,24 +456,24 @@ static int do_vm_diff(const char *old_path, const char *new_path,
 
 
   long total_max = totalA > totalB ? totalA : totalB;
-  long from = opts->has_heap_range ? opts->heap_from : 0;
-  long to = opts->has_heap_range ? opts->heap_to : default_heap_to(total_max);
+  long from = options->has_heap_range ? options->heap_from : 0;
+  long to = options->has_heap_range ? options->heap_to : default_heap_to(total_max);
 
   fprintf(out,
           "=== pg_vm diff ===\nold: %s (%ld pages)\nnew: %s (%ld pages)\n"
           "heap page range covered: [%ld, %ld]\n\n",
           old_path, totalA, new_path, totalB, from, to);
 
-  if (opts->expand) {
-    print_expanded_diff(out, A, totalA, B, totalB, from, to, opts);
+  if (options->expand) {
+    print_expanded_diff(out, A, totalA, B, totalB, from, to, options);
   } else {
-    VmDiffRunVec runs = compute_diff_runs(A, totalA, B, totalB, from, to);
-    print_diff_runs(out, &runs, opts);
-    if (opts->stats) {
+    VmDiffRunVec compressed = compute_diff_compressed(A, totalA, B, totalB, from, to);
+    print_diff_compressed(out, &compressed, options);
+    if (options->stats) {
       long changed_pages = 0, gained_visible = 0, lost_visible = 0,
            gained_frozen = 0, lost_frozen = 0;
-      for (long i = 0; i < runs.count; i++) {
-        const VmDiffRun *r = &runs.items[i];
+      for (long i = 0; i < compressed.count; i++) {
+        const VmDiffRun *r = &compressed.items[i];
         long n = r->heap_end - r->heap_start + 1;
         if (r->old_status == r->new_status) continue;
         changed_pages += n;
@@ -483,14 +491,14 @@ static int do_vm_diff(const char *old_path, const char *new_path,
               "\nSUMMARY\n--------------------------------------------------"
               "------------\n");
       fprintf(out, "heap pages in range: %ld, compressed into %ld run(s)\n",
-              to - from + 1, runs.count);
+              to - from + 1, compressed.count);
       fprintf(out, "changed heap pages: %ld\n", changed_pages);
       fprintf(out, "+ all-visible: %ld  - all-visible: %ld\n",
               gained_visible, lost_visible);
       fprintf(out, "+ all-frozen: %ld  - all-frozen: %ld\n",
               gained_frozen, lost_frozen);
     }
-    free(runs.items);
+    free(compressed.items);
   }
 
   fclose(out);
@@ -518,7 +526,7 @@ static void vm_usage(const char *prog) {
           prog, prog);
 }
 
-static void parse_vm_flags(int argc, char **argv, int start, VmOptions *opts,
+static void parse_vm_flags(int argc, char **argv, int start, VmOptions *options,
                         char **pos, int *npos) {
   *npos = 0;
   for (int i = start; i < argc; i++) {
@@ -527,36 +535,36 @@ static void parse_vm_flags(int argc, char **argv, int start, VmOptions *opts,
     if (strcmp(a, "--heap-range") == 0 && i + 1 < argc) {
       long lo, hi;
       if (sscanf(argv[++i], "%ld-%ld", &lo, &hi) == 2) {
-        opts->has_heap_range = 1;
-        opts->heap_from = lo;
-        opts->heap_to = hi;
+        options->has_heap_range = 1;
+        options->heap_from = lo;
+        options->heap_to = hi;
       } else {
         fprintf(stderr, "bad --heap-range value %s, expected A-B (ignored)\n",
                 argv[i]);
       }
     } else if (strcmp(a, "--heap-page") == 0 && i + 1 < argc) {
-      opts->has_heap_page = 1;
-      opts->heap_page_query = atol(argv[++i]);
+      options->has_heap_page = 1;
+      options->heap_page_query = atol(argv[++i]);
     } else if (strcmp(a, "--extra") == 0) {
-      opts->expand = 1;
+      options->expand = 1;
     } else if (strcmp(a, "--only-not-visible") == 0) {
-      opts->only_not_visible = 1;
+      options->only_not_visible = 1;
     } else if (strcmp(a, "--notV") == 0) {
-      opts->only_not_visible = 1;
+      options->only_not_visible = 1;
     } else if (strcmp(a, "--only-not-frozen") == 0) {
-      opts->only_not_frozen = 1;
+      options->only_not_frozen = 1;
       } else if (strcmp(a, "--notF") == 0) {
-      opts->only_not_frozen = 1;
+      options->only_not_frozen = 1;
     } else if (strcmp(a, "--only-changed") == 0) {
-      opts->only_changed = 1;
+      options->only_changed = 1;
     } else if (a[0] == '-' && a[1] != '\0' && a[1] != '-') {
       for (const char *c = a + 1; *c; c++) {
         switch (*c) {
           case 'H':
-            opts->show_headers = 1;
+            options->show_headers = 1;
             break;
           case 'q':
-            opts->stats = 1;
+            options->stats = 1;
             break;
           default:
             fprintf(stderr, "unknown flag -%c (ignored)\n", *c);
@@ -574,25 +582,25 @@ int vm_main(int argc, char **argv) {
     return 1;
   }
 
-  VmOptions opts = {0};
-  opts.stats = 0;
+  VmOptions options = {0};
+  options.stats = 0;
   char *pos[8];
   int npos = 0;
 
   if (strcmp(argv[1], "dump") == 0) {
-    parse_vm_flags(argc, argv, 2, &opts, pos, &npos);
+    parse_vm_flags(argc, argv, 2, &options, pos, &npos);
     if (npos != 2) {
       vm_usage(argv[0]);
       return 1;
     }
-    return do_vm_dump(pos[0], pos[1], &opts);
+    return do_vm_dump(pos[0], pos[1], &options);
   } else if (strcmp(argv[1], "diff") == 0) {
-    parse_vm_flags(argc, argv, 2, &opts, pos, &npos);
+    parse_vm_flags(argc, argv, 2, &options, pos, &npos);
     if (npos != 3) {
       vm_usage(argv[0]);
       return 1;
     }
-    return do_vm_diff(pos[0], pos[1], pos[2], &opts);
+    return do_vm_diff(pos[0], pos[1], pos[2], &options);
   }
 
   vm_usage(argv[0]);
