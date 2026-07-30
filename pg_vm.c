@@ -16,10 +16,6 @@
 #include "postgres.h"
 #include "pg_vm.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "access/visibilitymapdefs.h"
 #include "storage/bufpage.h"
 
