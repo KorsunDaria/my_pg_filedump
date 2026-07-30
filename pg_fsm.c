@@ -111,20 +111,6 @@ static void heap_page_to_fsm_slot(long heap_page, long *out_fsm_page,
   *out_slot = heap_page % LeafNodesPerPage;
 }
 
-// typedef struct PageHeaderData
-// {
-// 	/* XXX LSN is member of *any* block, not only page-organized ones */
-// 	PageXLogRecPtr pd_lsn;		/* LSN: next byte after last byte of xlog
-// 	uint16		pd_checksum;	/* checksum */
-// 	uint16		pd_flags;		/* flag bits, see below */
-// 	LocationIndex pd_lower;		/* offset to start of free space */
-// 	LocationIndex pd_upper;		/* offset to end of free space */
-// 	LocationIndex pd_special;	/* offset to start of special space */
-// 	uint16		pd_pagesize_version;
-// 	TransactionId pd_prune_xid; /* oldest prunable XID, or zero if none */
-// 	ItemIdData	pd_linp[FLEXIBLE_ARRAY_MEMBER]; /* line pointer array */
-// } PageHeaderData;
-
 typedef struct {
   long page;
   int level;
@@ -137,11 +123,8 @@ typedef struct {
   HeaderStatus header_status;
   const char *invalid_reason;
 
-  uint16 pd_flags, pd_checksum;
-  uint64 lsn;
-  LocationIndex pd_lower, pd_upper, pd_special;
-  uint16 pd_pagesize_version;
-  
+  PageHeaderData header;
+
   int fp_next_slot;
   uint8 nodes[NodesPerPage];
 } FsmPageInfo;
@@ -162,13 +145,7 @@ static void fill_fsm_page_info(const uint8 *buf, long page_index,
   page_info->invalid_reason = reason;
   page_info->valid =
       !page_info->allzero && page_info->header_status == HEADER_OK;
-  page_info->pd_flags = page_header->pd_flags;
-  page_info->pd_checksum = page_header->pd_checksum;
-  page_info->lsn = PageGetLSN((Page)buf);
-  page_info->pd_lower = page_header->pd_lower;
-  page_info->pd_upper = page_header->pd_upper;
-  page_info->pd_special = page_header->pd_special;
-  page_info->pd_pagesize_version = page_header->pd_pagesize_version;
+  page_info->header = *page_header;
 
   FSMPage fsm_page = (FSMPage)PageGetContents((Page)buf);
   page_info->fp_next_slot = fsm_page->fp_next_slot;
@@ -357,11 +334,12 @@ static void print_header_line(FILE *out, const char *indent,
           "%s  header: pd_lsn=%llX pd_checksum=%u pd_flags=0x%x "
           "pd_lower=%u pd_upper=%u pd_special=%u "
           "pagesize=%u layout_version=%u fp_next_slot=%d\n",
-          indent, (unsigned long long)page_info->lsn, page_info->pd_checksum,
-          page_info->pd_flags, page_info->pd_lower, page_info->pd_upper,
-          page_info->pd_special,
-          (unsigned)(page_info->pd_pagesize_version & 0xFF00),
-          (unsigned)(page_info->pd_pagesize_version & 0x00FF),
+          indent, (unsigned long long)PageXLogRecPtrGet(page_info->header.pd_lsn),
+          page_info->header.pd_checksum, page_info->header.pd_flags,
+          page_info->header.pd_lower, page_info->header.pd_upper,
+          page_info->header.pd_special,
+          (unsigned)(page_info->header.pd_pagesize_version & 0xFF00),
+          (unsigned)(page_info->header.pd_pagesize_version & 0x00FF),
           page_info->fp_next_slot);
   if (page_info->header_status == HEADER_INVALID)
     fprintf(out, "%s  header valid: no (%s)\n", indent,
@@ -843,14 +821,16 @@ static void diff_node(FILE *out, FsmPageInfo *A, long totalA, FsmPageInfo *B,
     stats->pages_removed++;
   else if (status == ST_CHANGED) {
     stats->pages_changed++;
-    int structural = old_page->pd_lower != new_page->pd_lower ||
-                     old_page->pd_upper != new_page->pd_upper ||
-                     old_page->pd_special != new_page->pd_special ||
-                     old_page->pd_flags != new_page->pd_flags ||
-                     old_page->pd_pagesize_version != new_page->pd_pagesize_version ||
+    int structural = old_page->header.pd_lower != new_page->header.pd_lower ||
+                     old_page->header.pd_upper != new_page->header.pd_upper ||
+                     old_page->header.pd_special != new_page->header.pd_special ||
+                     old_page->header.pd_flags != new_page->header.pd_flags ||
+                     old_page->header.pd_pagesize_version != new_page->header.pd_pagesize_version ||
                      old_page->fp_next_slot != new_page->fp_next_slot;
-    int hdr_changed = structural || old_page->lsn != new_page->lsn ||
-                       old_page->pd_checksum != new_page->pd_checksum;
+    int hdr_changed = structural ||
+                       PageXLogRecPtrGet(old_page->header.pd_lsn) !=
+                           PageXLogRecPtrGet(new_page->header.pd_lsn) ||
+                       old_page->header.pd_checksum != new_page->header.pd_checksum;
     if (hdr_changed) {
       stats->headers_changed++;
       if (structural) {

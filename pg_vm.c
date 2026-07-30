@@ -46,11 +46,7 @@ typedef struct {
   HeaderStatus header_status;
   const char *invalid_reason;
 
-  uint16 pd_flags;
-  uint16 pd_checksum;
-  uint64 lsn;
-  LocationIndex pd_lower, pd_upper, pd_special;
-  uint16 pd_pagesize_version;
+  PageHeaderData header;
   uint8 bitmap[MAP_SIZE];
 } VmPageInfo;
 
@@ -60,7 +56,7 @@ static int vm_page_is_all_zero(const uint8 *buf) {
   return 1;
 }
 
-static HeaderStatus fsm_header_status(PageHeader page_header, const char **reason) {
+static HeaderStatus vm_header_status(PageHeader page_header, const char **reason) {
   uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
   uint16 version = page_header->pd_pagesize_version & 0x00FF;
 
@@ -89,21 +85,8 @@ static HeaderStatus fsm_header_status(PageHeader page_header, const char **reaso
   return HEADER_OK;
 }
 
-// static int vm_header_looks_valid(PageHeader page_header) {
-//   uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
-//   uint16 version = page_header->pd_pagesize_version & 0x00FF;
-//   if (pagesize != BLCKSZ) return 0;
-//   if (version == 0 || version > PG_PAGE_LAYOUT_VERSION) return 0;
-//   if (page_header->pd_special > BLCKSZ) return 0;
-//   if (page_header->pd_lower > page_header->pd_upper) return 0;
-//   if (page_header->pd_upper > page_header->pd_special) return 0;
-//   return 1;
-// }
-
-static void fill_fsm_page_info(const uint8 *buf, long page_index,
-                               VmPageInfo *page_info) {
-                               
-  page_info->page = page_index;
+static void fill_vm_page_info(const uint8 *buf, long page_index,
+                              VmPageInfo *page_info) {
   page_info->page = page_index;
   page_info->allzero = vm_page_is_all_zero(buf);
 
@@ -111,25 +94,17 @@ static void fill_fsm_page_info(const uint8 *buf, long page_index,
   const char *reason = NULL;
   page_info->header_status = page_info->allzero
                                 ? HEADER_OK
-                                : fsm_header_status(page_header, &reason);
+                                : vm_header_status(page_header, &reason);
   page_info->invalid_reason = reason;
   page_info->valid =
     !page_info->allzero && page_info->header_status == HEADER_OK;
 
-  page_info->pd_flags = page_header->pd_flags;
-  page_info->pd_checksum = page_header->pd_checksum;
-  page_info->lsn = PageGetLSN((Page)buf);
-  page_info->pd_lower = page_header->pd_lower;
-  page_info->pd_upper = page_header->pd_upper;
-  page_info->pd_special = page_header->pd_special;
-  page_info->pd_pagesize_version = page_header->pd_pagesize_version;
+  page_info->header = *page_header;
 
   if (page_info->allzero || page_info->valid)
     memcpy(page_info->bitmap, PageGetContents((Page)buf), MAP_SIZE);
   else
-    memset(page_info->bitmap, 0, MAP_SIZE); 
-
-
+    memset(page_info->bitmap, 0, MAP_SIZE);
 }
 
 static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
@@ -156,7 +131,7 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
       fprintf(stderr, "warning: short read at page %ld, treating as zero\n", page_index);
       memset(buf, 0, BLCKSZ);
     }
-    fill_fsm_page_info(buf, page_index, &pages[page_index]);
+    fill_vm_page_info(buf, page_index, &pages[page_index]);
   }
   fclose(f);
   *out_total_pages = total_pages;
@@ -298,8 +273,11 @@ static void print_page_headers(FILE *out, const VmPageInfo *pages,
     fprintf(out,
             "vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
             "special=%u\n",
-            page_index, (unsigned long long)page_info->lsn, page_info->pd_checksum, page_info->pd_flags,
-            page_info->pd_lower, page_info->pd_upper, page_info->pd_special);
+            page_index,
+            (unsigned long long)PageXLogRecPtrGet(page_info->header.pd_lsn),
+            page_info->header.pd_checksum, page_info->header.pd_flags,
+            page_info->header.pd_lower, page_info->header.pd_upper,
+            page_info->header.pd_special);
 
     }
 }
@@ -522,6 +500,7 @@ static void vm_usage(const char *prog) {
           "  --extra             one line per heap page \n"
           "  --only-not-visible  dump: only ranges missing ALL_VISIBLE\n"
           "  --only-not-frozen   dump: only ranges missing ALL_FROZEN\n"
+          "  --notF  --notV      short cart for flags"
           "  --only-changed      diff: only ranges whose status changed\n",
           prog, prog);
 }
