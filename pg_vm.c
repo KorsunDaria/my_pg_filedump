@@ -100,7 +100,7 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
     if (pi->allzero || pi->valid)
       memcpy(pi->bitmap, PageGetContents((Page)buf), MAP_SIZE);
     else
-      memset(pi->bitmap, 0, MAP_SIZE); /* corrupt page: don't trust its bits */
+      memset(pi->bitmap, 0, MAP_SIZE); 
   }
   fclose(f);
   *out_total_pages = total_pages;
@@ -122,7 +122,7 @@ static int heap_page_status(const VmPageInfo *pages, long total_pages,
 }
 
 typedef struct {
-  long heap_start, heap_end; /* inclusive */
+  long heap_start, heap_end;
   int status;
 } VmRun;
 
@@ -226,9 +226,9 @@ static int status_has_frozen(int status) {
   return status > 0 && (status & VISIBILITYMAP_ALL_FROZEN);
 }
 
-static void print_page_inventory(FILE *out, const VmPageInfo *pages,
+static void print_page_headers(FILE *out, const VmPageInfo *pages,
                                  long total_pages) {
-  fprintf(out, "\n-- physical page inventory (-H) --\n");
+  fprintf(out, "\n-- physical page headers (-H) --\n");
   for (long p = 0; p < total_pages; p++) {
     const VmPageInfo *pi = &pages[p];
     if (pi->allzero) {
@@ -330,14 +330,6 @@ static int do_vm_dump(const char *in_path, const char *out_path,
     return 0;
   }
 
-  // if (opts->expand && !opts->has_heap_range) {
-  //   fprintf(stderr,
-  //           "--extra needs --heap-range A-B (refusing to print every heap "
-  //           "page of the whole file)\n");
-  //   fclose(out);
-  //   free(pages);
-  //   return 1;
-  // }
 
   long from = opts->has_heap_range ? opts->heap_from : 0;
   long to = opts->has_heap_range ? opts->heap_to : default_heap_to(total_pages);
@@ -350,7 +342,7 @@ static int do_vm_dump(const char *in_path, const char *out_path,
   fprintf(out, "heap page range covered: [%ld, %ld]\n", from, to);
   fprintf(out, "\n");
 
-  if (opts->show_headers) print_page_inventory(out, pages, total_pages);
+  if (opts->show_headers) print_page_headers(out, pages, total_pages);
 
   fprintf(out, "\n-- heap page status%s --\n",
           opts->expand ? " (expanded)"
@@ -405,15 +397,6 @@ static int do_vm_diff(const char *old_path, const char *new_path,
     return 1;
   }
 
-  // if (opts->expand && !opts->has_heap_range) {
-  //   fprintf(stderr,
-  //           "--extra needs --heap-range A-B (refusing to print every heap "
-  //           "page of the whole file)\n");
-  //   fclose(out);
-  //   free(A);
-  //   free(B);
-  //   return 1;
-  // }
 
   long total_max = totalA > totalB ? totalA : totalB;
   long from = opts->has_heap_range ? opts->heap_from : 0;
