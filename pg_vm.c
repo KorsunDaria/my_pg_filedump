@@ -274,7 +274,7 @@ static void print_page_headers(FILE *out, const VmPageInfo *pages,
             "vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
             "special=%u\n",
             page_index,
-            (unsigned long long)PageXLogRecPtrGet(page_info->header.pd_lsn),
+            (unsigned long long) ((uint64) page_info->header.pd_lsn.xlogid << 32 | page_info->header.pd_lsn.xrecoff),
             page_info->header.pd_checksum, page_info->header.pd_flags,
             page_info->header.pd_lower, page_info->header.pd_upper,
             page_info->header.pd_special);

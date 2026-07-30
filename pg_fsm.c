@@ -327,14 +327,13 @@ static int in_avail_range(const FsmOptions *options, unsigned avail_bytes) {
   return 1;
 }
 
-//!
 static void print_header_line(FILE *out, const char *indent,
                               const FsmPageInfo *page_info) {
   fprintf(out,
           "%s  header: pd_lsn=%llX pd_checksum=%u pd_flags=0x%x "
           "pd_lower=%u pd_upper=%u pd_special=%u "
           "pagesize=%u layout_version=%u fp_next_slot=%d\n",
-          indent, (unsigned long long)PageXLogRecPtrGet(page_info->header.pd_lsn),
+          indent, (unsigned long long)((uint64) page_info->header.pd_lsn.xlogid << 32 | page_info->header.pd_lsn.xrecoff),
           page_info->header.pd_checksum, page_info->header.pd_flags,
           page_info->header.pd_lower, page_info->header.pd_upper,
           page_info->header.pd_special,
@@ -828,8 +827,9 @@ static void diff_node(FILE *out, FsmPageInfo *A, long totalA, FsmPageInfo *B,
                      old_page->header.pd_pagesize_version != new_page->header.pd_pagesize_version ||
                      old_page->fp_next_slot != new_page->fp_next_slot;
     int hdr_changed = structural ||
-                       PageXLogRecPtrGet(old_page->header.pd_lsn) !=
-                           PageXLogRecPtrGet(new_page->header.pd_lsn) ||
+                       ((uint64) old_page->header.pd_lsn.xlogid << 32 | old_page->header.pd_lsn.xrecoff)
+                       !=
+                        ((uint64) new_page->header.pd_lsn.xlogid << 32 | new_page->header.pd_lsn.xrecoff) ||
                        old_page->header.pd_checksum != new_page->header.pd_checksum;
     if (hdr_changed) {
       stats->headers_changed++;
@@ -926,9 +926,9 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
             "--------------------------------------------------------------\n");
     fprintf(out,
             "pages changed: %ld  added: %ld  removed: %ld  headers changed: "
-            "%ld (structural: %ld)\n",
+            "%ld \n",
             stats.pages_changed, stats.pages_added, stats.pages_removed,
-            stats.headers_changed, stats.headers_structural_changed);
+            stats.headers_changed);
     fprintf(out,
             "node/slots changed: %ld (gained space: %ld, lost space: %ld)\n",
             stats.slots_changed, stats.slots_up, stats.slots_down);
