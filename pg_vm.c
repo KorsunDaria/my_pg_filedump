@@ -30,10 +30,22 @@
 #define VM_STATUS_OUT_OF_FILE (-1)
 #define VM_STATUS_CORRUPT (-2)
 
+typedef enum {
+  HEADER_OK,
+  HEADER_WRONG_PAGESIZE,
+  HEADER_INVALID
+} HeaderStatus;
+
+
 typedef struct {
   long page;
+
   int valid;
   int allzero;
+
+  HeaderStatus header_status;
+  const char *invalid_reason;
+
   uint16 pd_flags;
   uint16 pd_checksum;
   uint64 lsn;
@@ -48,14 +60,43 @@ static int vm_page_is_all_zero(const uint8 *buf) {
   return 1;
 }
 
-static int vm_header_looks_valid(PageHeader ph) {
-  uint16 pagesize = ph->pd_pagesize_version & 0xFF00;
-  uint16 version = ph->pd_pagesize_version & 0x00FF;
+static HeaderStatus fsm_header_status(PageHeader page_header, const char **reason) {
+  uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
+  uint16 version = page_header->pd_pagesize_version & 0x00FF;
+
+  if (pagesize != BLCKSZ) {
+    *reason =
+        "page size in header does not match BLCKSZ this binary was built with";
+    return HEADER_WRONG_PAGESIZE;
+  }
+  if (version == 0 || version > PG_PAGE_LAYOUT_VERSION) {
+    *reason = "bad page layout version";
+    return HEADER_INVALID;
+  }
+  if (page_header->pd_special > BLCKSZ) {
+    *reason = "pd_special is larger than the page";
+    return HEADER_INVALID;
+  }
+  if (page_header->pd_lower > page_header->pd_upper) {
+    *reason = "pd_lower is greater than pd_upper";
+    return HEADER_INVALID;
+  }
+  if (page_header->pd_upper > page_header->pd_special) {
+    *reason = "pd_upper is greater than pd_special";
+    return HEADER_INVALID;
+  }
+  *reason = NULL;
+  return HEADER_OK;
+}
+
+static int vm_header_looks_valid(PageHeader page_header) {
+  uint16 pagesize = page_header->pd_pagesize_version & 0xFF00;
+  uint16 version = page_header->pd_pagesize_version & 0x00FF;
   if (pagesize != BLCKSZ) return 0;
   if (version == 0 || version > PG_PAGE_LAYOUT_VERSION) return 0;
-  if (ph->pd_special > BLCKSZ) return 0;
-  if (ph->pd_lower > ph->pd_upper) return 0;
-  if (ph->pd_upper > ph->pd_special) return 0;
+  if (page_header->pd_special > BLCKSZ) return 0;
+  if (page_header->pd_lower > page_header->pd_upper) return 0;
+  if (page_header->pd_upper > page_header->pd_special) return 0;
   return 1;
 }
 
@@ -83,24 +124,31 @@ static VmPageInfo *load_vm(const char *path, long *out_total_pages) {
       fprintf(stderr, "warning: short read at page %ld, treating as zero\n", p);
       memset(buf, 0, BLCKSZ);
     }
-    VmPageInfo *pi = &pages[p];
-    pi->page = p;
-    pi->allzero = vm_page_is_all_zero(buf);
+    VmPageInfo *page_info = &pages[p];
+    page_info->page = p;
+    page_info->allzero = vm_page_is_all_zero(buf);
 
-    PageHeader ph = (PageHeader)buf;
-    pi->valid = !pi->allzero && vm_header_looks_valid(ph);
-    pi->pd_flags = ph->pd_flags;
-    pi->pd_checksum = ph->pd_checksum;
-    pi->lsn = PageGetLSN((Page)buf);
-    pi->pd_lower = ph->pd_lower;
-    pi->pd_upper = ph->pd_upper;
-    pi->pd_special = ph->pd_special;
-    pi->pd_pagesize_version = ph->pd_pagesize_version;
+    PageHeader page_header = (PageHeader)buf;
+    const char *reason = NULL;
+    page_info->header_status = page_info->allzero
+                                  ? HEADER_OK
+                                  : fsm_header_status(page_header, &reason);
+    page_info->invalid_reason = reason;
+    page_info->valid =
+      !page_info->allzero && page_info->header_status == HEADER_OK;
 
-    if (pi->allzero || pi->valid)
-      memcpy(pi->bitmap, PageGetContents((Page)buf), MAP_SIZE);
+    page_info->pd_flags = page_header->pd_flags;
+    page_info->pd_checksum = page_header->pd_checksum;
+    page_info->lsn = PageGetLSN((Page)buf);
+    page_info->pd_lower = page_header->pd_lower;
+    page_info->pd_upper = page_header->pd_upper;
+    page_info->pd_special = page_header->pd_special;
+    page_info->pd_pagesize_version = page_header->pd_pagesize_version;
+
+    if (page_info->allzero || page_info->valid)
+      memcpy(page_info->bitmap, PageGetContents((Page)buf), MAP_SIZE);
     else
-      memset(pi->bitmap, 0, MAP_SIZE); 
+      memset(page_info->bitmap, 0, MAP_SIZE); 
   }
   fclose(f);
   *out_total_pages = total_pages;
@@ -112,13 +160,13 @@ static int heap_page_status(const VmPageInfo *pages, long total_pages,
   long vm_page = heap_page / HEAPBLOCKS_PER_PAGE;
   if (vm_page >= total_pages) return VM_STATUS_OUT_OF_FILE;
 
-  const VmPageInfo *pi = &pages[vm_page];
-  if (!pi->allzero && !pi->valid) return VM_STATUS_CORRUPT;
+  const VmPageInfo *page_info = &pages[vm_page];
+  if (!page_info->allzero && !page_info->valid) return VM_STATUS_CORRUPT;
 
   long offset = heap_page % HEAPBLOCKS_PER_PAGE;
   long byte_idx = offset / HEAPBLOCKS_PER_BYTE;
   int bit_shift = (int)(offset % HEAPBLOCKS_PER_BYTE) * BITS_PER_HEAPBLOCK;
-  return (pi->bitmap[byte_idx] >> bit_shift) & VISIBILITYMAP_VALID_BITS;
+  return (page_info->bitmap[byte_idx] >> bit_shift) & VISIBILITYMAP_VALID_BITS;
 }
 
 typedef struct {
@@ -228,23 +276,24 @@ static int status_has_frozen(int status) {
 
 static void print_page_headers(FILE *out, const VmPageInfo *pages,
                                  long total_pages) {
-  fprintf(out, "\n-- physical page headers (-H) --\n");
+  fprintf(out, "\n-- page_headerysical page headers (-H) --\n");
   for (long p = 0; p < total_pages; p++) {
-    const VmPageInfo *pi = &pages[p];
-    if (pi->allzero) {
+    const VmPageInfo *page_info = &pages[p];
+    if (page_info->allzero) {
       fprintf(out, "vm page %ld: empty (all-zero)\n", p);
       continue;
     }
-    if (!pi->valid) {
-      fprintf(out, "vm page %ld: INVALID HEADER\n", p);
+    if (page_info->header_status == HEADER_INVALID) {
+      fprintf(out, "vm page %ld: header valid: no (%s)\n", p, page_info->invalid_reason);
       continue;
     }
     fprintf(out,
             "vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
             "special=%u\n",
-            p, (unsigned long long)pi->lsn, pi->pd_checksum, pi->pd_flags,
-            pi->pd_lower, pi->pd_upper, pi->pd_special);
-  }
+            p, (unsigned long long)page_info->lsn, page_info->pd_checksum, page_info->pd_flags,
+            page_info->pd_lower, page_info->pd_upper, page_info->pd_special);
+
+    }
 }
 
 static void print_runs(FILE *out, const VmRunVec *runs, const VmOptions *opts) {
@@ -457,7 +506,7 @@ static void vm_usage(const char *prog) {
           "  %s dump [flags] <relfilenode_vm> <out.txt>\n"
           "  %s diff [flags] <old_vm> <new_vm> <out.txt>\n"
           "flags:\n"
-          "  -H                  per-physical-page header inventory\n"
+          "  -H                  per-page_headerysical-page header inventory\n"
           "  -q                  add summary\n"
           "  --heap-range A-B    process heap pages [A,B]\n"
           "  --heap-page N       dump only: status of one heap "

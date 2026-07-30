@@ -133,6 +133,7 @@ typedef struct {
 
   int valid;
   int allzero;
+
   HeaderStatus header_status;
   const char *invalid_reason;
 
@@ -216,7 +217,7 @@ typedef struct {
 } LongVec;
 
 
-static void long_vec_add(LongVec *v, long x) {
+static void long_vec_push(LongVec *v, long x) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 4;
     v->items = realloc(v->items, v->cap * sizeof(long));
@@ -231,7 +232,7 @@ static LongVec *build_fsm_children(long total_pages) {
     long parent_id, logpageno;
     classify_fsm_page(page_index, &level, &parent_id, &logpageno);
     if (parent_id >= 0 && parent_id < total_pages)
-      long_vec_add(&by_parent[parent_id], page_index);
+      long_vec_push(&by_parent[parent_id], page_index);
   }
   return by_parent;
 }
@@ -252,7 +253,7 @@ typedef struct {
   long count, cap;
 } ByteCompressedRangeVec;
 
-static void byte_compressed_range_add(ByteCompressedRangeVec *v, long start,
+static void byte_compressed_range_push(ByteCompressedRangeVec *v, long start,
                                       long end, uint8 value) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 16;
@@ -269,12 +270,12 @@ static ByteCompressedRangeVec compute_byte_compressed_ranges(const uint8 *arr,
   uint8 val = arr[0];
   for (long i = 1; i < n; i++) {
     if (arr[i] != val) {
-      byte_compressed_range_add(&compressed, start, i - 1, val);
+      byte_compressed_range_push(&compressed, start, i - 1, val);
       start = i;
       val = arr[i];
     }
   }
-  byte_compressed_range_add(&compressed, start, n - 1, val);
+  byte_compressed_range_push(&compressed, start, n - 1, val);
   return compressed;
 }
 
@@ -288,7 +289,7 @@ typedef struct {
   long count, cap;
 } ByteDiffCompressedRangeVec;
 
-static void byte_diff_compressed_range_add(ByteDiffCompressedRangeVec *v,
+static void byte_diff_compressed_range_push(ByteDiffCompressedRangeVec *v,
                                            long start, long end, uint8 ov,
                                            uint8 nv) {
   if (v->count == v->cap) {
@@ -306,13 +307,13 @@ static ByteDiffCompressedRangeVec compute_byte_diff_compressed_ranges(
   uint8 ov = a[0], nv = b[0];
   for (long i = 1; i < n; i++) {
     if (a[i] != ov || b[i] != nv) {
-      byte_diff_compressed_range_add(&compressed, start, i - 1, ov, nv);
+      byte_diff_compressed_range_push(&compressed, start, i - 1, ov, nv);
       start = i;
       ov = a[i];
       nv = b[i];
     }
   }
-  byte_diff_compressed_range_add(&compressed, start, n - 1, ov, nv);
+  byte_diff_compressed_range_push(&compressed, start, n - 1, ov, nv);
   return compressed;
 }
 
@@ -738,7 +739,7 @@ typedef struct {
   long count, cap;
 } LeafDeltaVec;
 
-static void leaf_delta_add(LeafDeltaVec *v, long start, long end, long delta) {
+static void leaf_delta_push(LeafDeltaVec *v, long start, long end, long delta) {
   if (v->count == v->cap) {
     v->cap = v->cap ? v->cap * 2 : 16;
     v->items = realloc(v->items, v->cap * sizeof(LeafDelta));
@@ -794,7 +795,7 @@ static void print_leaf_diff(FILE *out, int do_print, const char *indent,
       stats->slots_up += n;
     else
       stats->slots_down += n;
-    leaf_delta_add(deltas, hp_start, hp_end, (long)nb - (long)ob);
+    leaf_delta_push(deltas, hp_start, hp_end, (long)nb - (long)ob);
     if (!do_print) continue;
     if (hp_start == hp_end)
       fprintf(out,
