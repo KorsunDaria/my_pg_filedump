@@ -443,7 +443,9 @@ static void
 print_page_headers(FILE *out, const VmPageInfo * pages,
 				   long total_pages)
 {
-	long		page_index;
+	long		        page_index;
+    unsigned long long  lsn;
+
 
 	fprintf(out, "\n-- physical page headers (-H) --\n");
 
@@ -464,13 +466,19 @@ print_page_headers(FILE *out, const VmPageInfo * pages,
 			continue;
 		}
 
+        if (PG_VERSION_NUM >= 190000) {
+					   lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+        }
+        else if (PG_VERSION_NUM >= 140000){
+					   lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+        }
 
 		header = page_info->header;
 		fprintf(
 				out,
 				"vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
 				"special=%u\n",
-				page_index, (unsigned long long) MY_PG_VM_LSN_GET(header.pd_lsn),
+				page_index, lsn,
 				header.pd_checksum, header.pd_flags, header.pd_lower,
 				header.pd_upper, header.pd_special);
 	}
