@@ -25,6 +25,8 @@
 #define VM_STATUS_OUT_OF_FILE (-1)
 #define VM_STATUS_CORRUPT (-2)
 
+
+
 #define MY_PG_VM_LSN_GET(val)                                                  \
 	(((uint64)(val).xlogid << 32) | (uint64)(val).xrecoff)
 
@@ -41,7 +43,8 @@ typedef enum
  */
 typedef enum
 {
-VM_FAIL = 0, VM_SUCCESS = 1} VmResult;
+VM_FAIL = 0, VM_SUCCESS = 1
+}           VmResult;
 
 /*
  * VmPageInfo - everything about one VM (visibility map) page.
@@ -460,6 +463,7 @@ print_page_headers(FILE *out, const VmPageInfo * pages,
 					page_info->invalid_reason);
 			continue;
 		}
+
 
 		header = page_info->header;
 		fprintf(
