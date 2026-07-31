@@ -1054,8 +1054,6 @@ vm_main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	options.stats = 0;
-
 	if (strcmp(argv[1], "dump") == 0)
 	{
 		parse_vm_flags(argc, argv, 2, &options, pos, &npos);
