@@ -1,0 +1,247 @@
+pg_filedump.o: pg_filedump.c pg_filedump.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/c.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/gin_private.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/amapi.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/genam.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/sdir.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/skey.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/attnum.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/stratnum.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/fmgr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/tidbitmap.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemptr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/block.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/off.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemid.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/dsa.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/arch-arm.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/generic-gcc.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/fallback.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/generic.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/dsm.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/dsm_impl.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/lockdefs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/relcache.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/tupdesc.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_attribute.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/genbki.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_attribute_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/pg_list.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/nodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/nodetags.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/common/relpath.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/catversion.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/bitmapset.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/snapshot.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/htup.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogdefs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/datatype/timestamp.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/pairingheap.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/buf.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/gin.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogreader.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/transam.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogrecord.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/rmgr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/rmgrlist.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_crc32c.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_bswap.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/relfilelocator.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/procnumber.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/ginblock.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufpage.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/item.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/itup.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/tupmacs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_type_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/common/int.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_am_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/rbtree.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufmgr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_iovec.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/snapmgr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/resowner.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/gist.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlog.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogbackup.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pgtime.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/hash.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/common/hashfn.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/hsearch.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/htup_details.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/varatt.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/nbtree.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/tableam.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/relscan.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/spin.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/s_lock.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xact.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/sinval.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/executor/tuptable.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/sysattr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/read_stream.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/rel.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/catalog.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_class.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_class_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_index.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_index_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_publication.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/objectaddress.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/parsenodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/lockoptions.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/primnodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/nodes/value.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/partitioning/partdefs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_publication_d.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/rewrite/prs2lock.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/smgr.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/ilist.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/reltrigger.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/shm_toc.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/shmem.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/spgist_private.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/spgist.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/geo_decls.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_control.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/pg_crc.h \
+  pg_fsm.h pg_vm.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/checksum.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/checksum_impl.h \
+  decode.h
+pg_filedump.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/c.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/gin_private.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/amapi.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/genam.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/sdir.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/skey.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/attnum.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/stratnum.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/fmgr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/tidbitmap.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemptr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/block.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/off.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemid.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/dsa.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/arch-arm.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/generic-gcc.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/fallback.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/atomics/generic.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/dsm.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/dsm_impl.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/lockdefs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/relcache.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/tupdesc.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_attribute.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/genbki.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_attribute_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/pg_list.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/nodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/nodetags.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/common/relpath.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/catversion.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/bitmapset.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/snapshot.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/htup.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogdefs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/datatype/timestamp.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/pairingheap.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/buf.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/gin.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogreader.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/transam.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogrecord.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/rmgr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/rmgrlist.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_crc32c.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_bswap.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/relfilelocator.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/procnumber.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/ginblock.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufpage.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/item.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/itup.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/tupmacs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_type_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/common/int.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_am_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/rbtree.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufmgr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port/pg_iovec.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/snapmgr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/resowner.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/gist.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlog.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogbackup.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pgtime.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/hash.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/common/hashfn.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/hsearch.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/htup_details.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/varatt.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/nbtree.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/tableam.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/relscan.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/spin.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/s_lock.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xact.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/sinval.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/executor/tuptable.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/sysattr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/read_stream.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/rel.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/catalog.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_class.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_class_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_index.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_index_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_publication.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/objectaddress.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/parsenodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/lockoptions.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/primnodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/nodes/value.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/partitioning/partdefs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_publication_d.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/rewrite/prs2lock.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/smgr.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/ilist.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/reltrigger.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/shm_toc.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/shmem.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/spgist_private.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/spgist.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/geo_decls.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/catalog/pg_control.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/pg_crc.h:
+pg_fsm.h:
+pg_vm.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/checksum.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/checksum_impl.h:
+decode.h:

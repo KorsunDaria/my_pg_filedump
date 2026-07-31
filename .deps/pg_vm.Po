@@ -1,0 +1,41 @@
+pg_vm.o: pg_vm.c \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/c.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/port.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h \
+  pg_vm.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/visibilitymapdefs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufpage.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogdefs.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/block.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/item.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/off.h \
+  /Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemid.h
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/c.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/postgres_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_ext.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_manual.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/pg_config_os.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/port.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/elog.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/lib/stringinfo.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/errcodes.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/utils/palloc.h:
+pg_vm.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/visibilitymapdefs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/bufpage.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/access/xlogdefs.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/block.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/item.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/off.h:
+/Users/dariakorsun/pginstall17/include/postgresql/server/storage/itemid.h:
