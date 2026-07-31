@@ -46,9 +46,15 @@
 #define VEC_PUSH(vec, ElemType, ...)                                           \
 	do {                                                                       \
 		if ((vec)->count == (vec)->cap) {                                      \
-			(vec)->cap = (vec)->cap ? (vec)->cap * 2 : 16;                     \
-			(vec)->items =                                                     \
-				realloc((vec)->items, (vec)->cap * sizeof(ElemType));          \
+			long _vec_new_cap = (vec)->cap ? (vec)->cap * 2 : 16;              \
+			void *_vec_new_items =                                            \
+				realloc((vec)->items, _vec_new_cap * sizeof(ElemType));        \
+			if (!_vec_new_items) {                                            \
+				fprintf(stderr, "out of memory (realloc failed)\n");          \
+				exit(1);                                                       \
+			}                                                                  \
+			(vec)->items = _vec_new_items;                                    \
+			(vec)->cap = _vec_new_cap;                                        \
 		}                                                                      \
 		(vec)->items[(vec)->count++] = (ElemType){__VA_ARGS__};                \
 	} while (0)
@@ -69,6 +75,11 @@ typedef struct {
 typedef enum { HEADER_OK, HEADER_WRONG_PAGESIZE, HEADER_INVALID } HeaderStatus;
 
 /*
+ * FsmResult - status code returned by the do_fsm_dump()/do_fsm_diff()
+ */
+typedef enum { FSM_FAIL = 0, FSM_SUCCESS = 1 } FsmResult;
+
+/*
  * FsmPageInfo - everything about one FSM page.
  */
 typedef struct {
@@ -80,10 +91,10 @@ typedef struct {
 	HeaderStatus header_status; /* result of header sanity checks */
 	const char *invalid_reason; /* text reason if invalid */
 
-	PageHeaderData header; /* raw copy of the standard page header */
-
 	int fp_next_slot;		   /* FSM-specific: next slot to search from */
 	uint8 nodes[NodesPerPage]; /* internal + leaf category bytes */
+
+	PageHeaderData header; /* raw copy of the standard page header */
 } FsmPageInfo;
 
 DECLARE_VEC(LongVec, long);
@@ -328,6 +339,12 @@ static FsmPageInfo *load_fsm(const char *path, long *out_total_pages) {
 	}
 
 	pages = calloc(total_pages, sizeof(FsmPageInfo));
+	if (!pages) {
+		fprintf(stderr, "%s: out of memory allocating %ld page(s)\n", path,
+				total_pages);
+		fclose(f);
+		return NULL;
+	}
 
 	for (page_index = 0; page_index < total_pages; page_index++) {
 		if (fread(buf, 1, BLCKSZ, f) != (size_t)BLCKSZ) {
@@ -351,6 +368,11 @@ static LongVec *build_fsm_children(long total_pages) {
 	long page_index;
 
 	by_parent = calloc(total_pages, sizeof(LongVec));
+	if (!by_parent) {
+		fprintf(stderr, "out of memory building children index (%ld page(s))\n",
+				total_pages);
+		return NULL;
+	}
 
 	for (page_index = 0; page_index < total_pages; page_index++) {
 		int level;
@@ -366,6 +388,10 @@ static LongVec *build_fsm_children(long total_pages) {
 
 static void free_fsm_children(LongVec *by_parent, long total_pages) {
 	long page_index;
+
+	if (!by_parent) {
+		return;
+	}
 
 	for (page_index = 0; page_index < total_pages; page_index++) {
 		free(by_parent[page_index].items);
@@ -508,19 +534,6 @@ static void print_header_line(FILE *out, const char *indent,
 	}
 }
 
-/* 
-* depth_label_indent - fixed indentation string 
-*/
-static const char *depth_label_indent(int level) {
-	switch (level) {
-	case 2:
-		return "    ";
-	case 1:
-		return "        ";
-	default:
-		return "            ";
-	}
-}
 
 /*
  * print_internal_compressed - print a page's internal (non-leaf + leaf)
@@ -1003,8 +1016,8 @@ static void print_summery(FILE *out, const DumpStats *stats, long total_pages) {
  * do_fsm_dump - load the FSM file, then either report a single lookup, or 
  * build the tree index and recursively print the whole tree via dump_node.
  */
-static int do_fsm_dump(const char *in_path, const char *out_path,
-					   const FsmOptions *options) {
+static FsmResult do_fsm_dump(const char *in_path, const char *out_path,
+							 const FsmOptions *options) {
 	long total_pages;
 	FsmPageInfo *pages;
 	FILE *out;
@@ -1013,14 +1026,14 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
 
 	pages = load_fsm(in_path, &total_pages);
 	if (!pages) {
-		return 1;
+		return FSM_FAIL;
 	}
 
 	out = fopen(out_path, "w");
 	if (!out) {
 		perror(out_path);
 		free(pages);
-		return 1;
+		return FSM_FAIL;
 	}
 
 	if (options->has_heap_page) {
@@ -1030,10 +1043,15 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
 		fclose(out);
 		free(pages);
 		fprintf(stderr, "wrote %s\n", out_path);
-		return 0;
+		return FSM_SUCCESS;
 	}
 
 	children = build_fsm_children(total_pages);
+	if (!children) {
+		fclose(out);
+		free(pages);
+		return FSM_FAIL;
+	}
 
 	print_entire_info(out, options, in_path, total_pages);
 	fprintf(out, "\n");
@@ -1048,7 +1066,7 @@ static int do_fsm_dump(const char *in_path, const char *out_path,
 	free_fsm_children(children, total_pages);
 	free(pages);
 	fprintf(stderr, "wrote %s\n", out_path);
-	return 0;
+	return FSM_SUCCESS;
 }
 
 /* Status - how a page compares between the old and new file in "diff". */
@@ -1461,8 +1479,8 @@ static void diff_print_summary(FILE *out, const DiffStats *stats) {
  * recursively compare them page-by-page via diff_node and print an optional
  * summary (-q).
  */
-static int do_fsm_diff(const char *old_path, const char *new_path,
-                       const char *out_path, const FsmOptions *options) {
+static FsmResult do_fsm_diff(const char *old_path, const char *new_path,
+                             const char *out_path, const FsmOptions *options) {
     long total_old, total_new;
     long total_max;
     FsmPageInfo *old_pages;
@@ -1474,16 +1492,21 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
 
     old_pages = load_fsm(old_path, &total_old);
     if (!old_pages) {
-        return 1;
+        return FSM_FAIL;
     }
     new_pages = load_fsm(new_path, &total_new);
     if (!new_pages) {
         free(old_pages);
-        return 1;
+        return FSM_FAIL;
     }
 
     total_max = total_old > total_new ? total_old : total_new;
     children = build_fsm_children(total_max);
+    if (!children) {
+        free(old_pages);
+        free(new_pages);
+        return FSM_FAIL;
+    }
 
     out = fopen(out_path, "w");
     if (!out) {
@@ -1491,7 +1514,7 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
         free(old_pages);
         free(new_pages);
         free_fsm_children(children, total_max);
-        return 1;
+        return FSM_FAIL;
     }
 
     diff_print_header(out, old_path, total_old, new_path, total_new, options);
@@ -1512,7 +1535,7 @@ static int do_fsm_diff(const char *old_path, const char *new_path,
     free(old_pages);
     free(new_pages);
     fprintf(stderr, "wrote %s\n", out_path);
-    return 0;
+    return FSM_SUCCESS;
 }
 
 /* 
@@ -1623,7 +1646,7 @@ int fsm_main(int argc, char **argv) {
 
 	if (argc < 2) {
 		fsm_usage(argv[0]);
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	options.stats = 0;
@@ -1632,18 +1655,22 @@ int fsm_main(int argc, char **argv) {
 		parse_fsm_flags(argc, argv, 2, &options, pos, &npos);
 		if (npos != 2) {
 			fsm_usage(argv[0]);
-			return 1;
+			return EXIT_FAILURE;
 		}
-		return do_fsm_dump(pos[0], pos[1], &options);
+		return do_fsm_dump(pos[0], pos[1], &options) == FSM_SUCCESS
+				   ? EXIT_SUCCESS
+				   : EXIT_FAILURE;
 	} else if (strcmp(argv[1], "diff") == 0) {
 		parse_fsm_flags(argc, argv, 2, &options, pos, &npos);
 		if (npos != 3) {
 			fsm_usage(argv[0]);
-			return 1;
+			return EXIT_FAILURE;
 		}
-		return do_fsm_diff(pos[0], pos[1], pos[2], &options);
+		return do_fsm_diff(pos[0], pos[1], pos[2], &options) == FSM_SUCCESS
+				   ? EXIT_SUCCESS
+				   : EXIT_FAILURE;
 	}
 
 	fsm_usage(argv[0]);
-	return 1;
+	return EXIT_FAILURE;
 }
