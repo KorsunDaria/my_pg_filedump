@@ -18,14 +18,14 @@
 #include "access/visibilitymapdefs.h"
 #include "storage/bufpage.h"
 
-#define MAP_SIZE ((int) (BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
+#define MAP_SIZE ((int)(BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
 #define HEAPBLOCKS_PER_BYTE (8 / BITS_PER_HEAPBLOCK)	/* 4 */
 #define HEAPBLOCKS_PER_PAGE (MAP_SIZE * HEAPBLOCKS_PER_BYTE)
 
 #define VM_STATUS_OUT_OF_FILE (-1)
 #define VM_STATUS_CORRUPT (-2)
 
-#define MY_PG_VM_LSN_GET(val)                                                 \
+#define MY_PG_VM_LSN_GET(val)                                                  \
 	(((uint64)(val).xlogid << 32) | (uint64)(val).xrecoff)
 
 /*
@@ -41,8 +41,7 @@ typedef enum
  */
 typedef enum
 {
-	VM_FAIL = 0, VM_SUCCESS = 1
-} VmResult;
+VM_FAIL = 0, VM_SUCCESS = 1} VmResult;
 
 /*
  * VmPageInfo - everything about one VM (visibility map) page.
@@ -120,8 +119,8 @@ vm_page_is_all_zero(const uint8 *buf)
  * vm_header_status - sanity-check a page header (size, version, and the
  * lower/upper/special offset ordering).
  */
-static HeaderStatus
-vm_header_status(PageHeader page_header, const char **reason)
+static HeaderStatus vm_header_status(PageHeader page_header,
+									 const char **reason)
 {
 	uint16		pagesize = page_header->pd_pagesize_version & 0xFF00;
 	uint16		version = page_header->pd_pagesize_version & 0x00FF;
@@ -161,7 +160,8 @@ vm_header_status(PageHeader page_header, const char **reason)
  * and copy the bitmap for one VM page.
  */
 static void
-fill_vm_page_info(const uint8 *buf, long page_index, VmPageInfo * page_info)
+fill_vm_page_info(const uint8 *buf, long page_index,
+				  VmPageInfo * page_info)
 {
 	PageHeader	page_header;
 	const char *reason = NULL;
@@ -170,9 +170,8 @@ fill_vm_page_info(const uint8 *buf, long page_index, VmPageInfo * page_info)
 
 	page_info->page = page_index;
 	page_info->allzero = vm_page_is_all_zero(buf);
-	page_info->header_status = page_info->allzero
-		? HEADER_OK
-		: vm_header_status(page_header, &reason);
+	page_info->header_status =
+		page_info->allzero ? HEADER_OK : vm_header_status(page_header, &reason);
 	page_info->invalid_reason = reason;
 	page_info->valid =
 		!page_info->allzero && page_info->header_status == HEADER_OK;
@@ -192,8 +191,7 @@ fill_vm_page_info(const uint8 *buf, long page_index, VmPageInfo * page_info)
  * load_vm - read a VM file into memory page by page. Returns an array of
  * VmPageInfo.
  */
-static VmPageInfo *
-load_vm(const char *path, long *out_total_pages)
+static VmPageInfo * load_vm(const char *path, long *out_total_pages)
 {
 	FILE	   *f;
 	long		filesize;
@@ -234,7 +232,8 @@ load_vm(const char *path, long *out_total_pages)
 	{
 		if (fread(buf, 1, BLCKSZ, f) != (size_t) BLCKSZ)
 		{
-			fprintf(stderr, "warning: short read at page %ld, treating as zero\n",
+			fprintf(stderr,
+					"warning: short read at page %ld, treating as zero\n",
 					page_index);
 			memset(buf, 0, BLCKSZ);
 		}
@@ -247,11 +246,11 @@ load_vm(const char *path, long *out_total_pages)
 
 /*
  * heap_page_status - look up the visibility-map status bits for one heap
- * page. Returns VM_STATUS_OUT_OF_FILE / VM_STATUS_CORRUPT, or the raw
- * VISIBILITYMAP_* bits.
+ * page. 
  */
 static int
-heap_page_status(const VmPageInfo * pages, long total_pages, long heap_page)
+heap_page_status(const VmPageInfo * pages, long total_pages,
+				 long heap_page)
 {
 	long		vm_page;
 	const		VmPageInfo *page_info;
@@ -274,7 +273,8 @@ heap_page_status(const VmPageInfo * pages, long total_pages, long heap_page)
 	offset = heap_page % HEAPBLOCKS_PER_PAGE;
 	byte_idx = offset / HEAPBLOCKS_PER_BYTE;
 	bit_shift = (int) (offset % HEAPBLOCKS_PER_BYTE) * BITS_PER_HEAPBLOCK;
-	return (page_info->bitmap[byte_idx] >> bit_shift) & VISIBILITYMAP_VALID_BITS;
+	return (page_info->bitmap[byte_idx] >> bit_shift) &
+		VISIBILITYMAP_VALID_BITS;
 }
 
 /*
@@ -298,9 +298,8 @@ vmrun_push(VmRunVec * vec, long start, long end, int status)
  * compute_compressed - run-length compress heap page statuses over
  * [from, to] into a VmRunVec.
  */
-static VmRunVec
-compute_compressed(const VmPageInfo * pages, long total_pages, long from,
-				   long to)
+static VmRunVec compute_compressed(const VmPageInfo * pages, long total_pages,
+								   long from, long to)
 {
 	VmRunVec	compressed = {0};
 	long		run_start;
@@ -334,8 +333,8 @@ compute_compressed(const VmPageInfo * pages, long total_pages, long from,
  * vmdiffrun_push - append one run to a VmDiffRunVec, growing it if needed.
  */
 static void
-vmdiffrun_push(VmDiffRunVec * vec, long start, long end, int old_status,
-			   int new_status)
+vmdiffrun_push(VmDiffRunVec * vec, long start, long end,
+			   int old_status, int new_status)
 {
 	if (vec->count == vec->cap)
 	{
@@ -352,10 +351,11 @@ vmdiffrun_push(VmDiffRunVec * vec, long start, long end, int old_status,
  * compute_diff_compressed - like compute_compressed, but over a pair of
  * VM files (old/new), used by the diff command.
  */
-static VmDiffRunVec
-compute_diff_compressed(const VmPageInfo * old_pages, long total_old,
-						const VmPageInfo * new_pages, long total_new,
-						long from, long to)
+static VmDiffRunVec compute_diff_compressed(const VmPageInfo * old_pages,
+											long total_old,
+											const VmPageInfo * new_pages,
+											long total_new, long from,
+											long to)
 {
 	VmDiffRunVec compressed = {0};
 	long		run_start;
@@ -437,7 +437,8 @@ status_has_frozen(int status)
  * print_page_headers - print the "-H" per-physical-page header inventory.
  */
 static void
-print_page_headers(FILE *out, const VmPageInfo * pages, long total_pages)
+print_page_headers(FILE *out, const VmPageInfo * pages,
+				   long total_pages)
 {
 	long		page_index;
 
@@ -461,13 +462,13 @@ print_page_headers(FILE *out, const VmPageInfo * pages, long total_pages)
 		}
 
 		header = page_info->header;
-		fprintf(out,
+		fprintf(
+				out,
 				"vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
 				"special=%u\n",
-				page_index,
-				(unsigned long long) MY_PG_VM_LSN_GET(header.pd_lsn),
-				header.pd_checksum, header.pd_flags,
-				header.pd_lower, header.pd_upper, header.pd_special);
+				page_index, (unsigned long long) MY_PG_VM_LSN_GET(header.pd_lsn),
+				header.pd_checksum, header.pd_flags, header.pd_lower,
+				header.pd_upper, header.pd_special);
 	}
 }
 
@@ -562,7 +563,8 @@ print_diff_compressed(FILE *out, const VmDiffRunVec * compressed,
 		}
 		else
 		{
-			fprintf(out, "heap pages %8ld-%-8ld: %s -> %s  [%s] (%ld page(s))\n",
+			fprintf(out,
+					"heap pages %8ld-%-8ld: %s -> %s  [%s] (%ld page(s))\n",
 					r->heap_start, r->heap_end, status_label(r->old_status),
 					status_label(r->new_status), tag,
 					r->heap_end - r->heap_start + 1);
@@ -575,9 +577,10 @@ print_diff_compressed(FILE *out, const VmDiffRunVec * compressed,
  * "--extra" diff view).
  */
 static void
-print_expanded_diff(FILE *out, const VmPageInfo * old_pages, long total_old,
-					const VmPageInfo * new_pages, long total_new, long from,
-					long to, const VmOptions * options)
+print_expanded_diff(FILE *out, const VmPageInfo * old_pages,
+					long total_old, const VmPageInfo * new_pages,
+					long total_new, long from, long to,
+					const VmOptions * options)
 {
 	long		hp;
 
@@ -611,11 +614,12 @@ default_heap_to(long total_pages)
  * honoring --heap-range if it was given.
  */
 static void
-resolve_heap_range(const VmOptions * options, long total_pages, long *from,
-				   long *to)
+resolve_heap_range(const VmOptions * options, long total_pages,
+				   long *from, long *to)
 {
 	*from = options->has_heap_range ? options->heap_from : 0;
-	*to = options->has_heap_range ? options->heap_to : default_heap_to(total_pages);
+	*to = options->has_heap_range ? options->heap_to
+		: default_heap_to(total_pages);
 }
 
 /*
@@ -641,7 +645,8 @@ do_vm_dump_heap_page(FILE *out, const char *in_path,
  * print_dump_summary - print the "-q" SUMMARY block for the dump command.
  */
 static void
-print_dump_summary(FILE *out, const VmRunVec * compressed, long from, long to)
+print_dump_summary(FILE *out, const VmRunVec * compressed, long from,
+				   long to)
 {
 	long		visible = 0;
 	long		frozen = 0;
@@ -681,8 +686,9 @@ print_dump_summary(FILE *out, const VmRunVec * compressed, long from, long to)
  * for [from, to], plus an optional summary.
  */
 static void
-do_vm_dump_range(FILE *out, const VmPageInfo * pages, long total_pages,
-				 long from, long to, const VmOptions * options)
+do_vm_dump_range(FILE *out, const VmPageInfo * pages,
+				 long total_pages, long from, long to,
+				 const VmOptions * options)
 {
 	fprintf(out, "\n-- heap page status%s --\n",
 			options->expand ? " (expanded)" : " (compressed)");
@@ -710,9 +716,8 @@ do_vm_dump_range(FILE *out, const VmPageInfo * pages, long total_pages,
  * answer a single --heap-page query or print the full (compressed or
  * expanded) heap-page status listing plus an optional summary (-q).
  */
-static VmResult
-do_vm_dump(const char *in_path, const char *out_path,
-		   const VmOptions * options)
+static VmResult do_vm_dump(const char *in_path, const char *out_path,
+						   const VmOptions * options)
 {
 	long		total_pages;
 	VmPageInfo *pages;
@@ -770,8 +775,8 @@ do_vm_dump(const char *in_path, const char *out_path,
  * print_diff_summary - print the "-q" SUMMARY block for the diff command.
  */
 static void
-print_diff_summary(FILE *out, const VmDiffRunVec * compressed, long from,
-				   long to)
+print_diff_summary(FILE *out, const VmDiffRunVec * compressed,
+				   long from, long to)
 {
 	long		changed_pages = 0;
 	long		gained_visible = 0;
@@ -836,9 +841,10 @@ print_diff_summary(FILE *out, const VmDiffRunVec * compressed, long from,
  * for [from, to], plus an optional summary.
  */
 static void
-do_vm_diff_range(FILE *out, const VmPageInfo * old_pages, long total_old,
-				 const VmPageInfo * new_pages, long total_new, long from,
-				 long to, const VmOptions * options)
+do_vm_diff_range(FILE *out, const VmPageInfo * old_pages,
+				 long total_old, const VmPageInfo * new_pages,
+				 long total_new, long from, long to,
+				 const VmOptions * options)
 {
 	if (options->expand)
 	{
@@ -848,9 +854,8 @@ do_vm_diff_range(FILE *out, const VmPageInfo * old_pages, long total_old,
 	}
 
 	{
-		VmDiffRunVec compressed = compute_diff_compressed(old_pages, total_old,
-														  new_pages, total_new,
-														  from, to);
+		VmDiffRunVec compressed = compute_diff_compressed(
+														  old_pages, total_old, new_pages, total_new, from, to);
 
 		print_diff_compressed(out, &compressed, options);
 		if (options->stats)
@@ -866,9 +871,8 @@ do_vm_diff_range(FILE *out, const VmPageInfo * old_pages, long total_old,
  * print the (compressed or expanded) old->new heap-page status for the
  * requested range plus an optional summary (-q).
  */
-static VmResult
-do_vm_diff(const char *old_path, const char *new_path, const char *out_path,
-		   const VmOptions * options)
+static VmResult do_vm_diff(const char *old_path, const char *new_path,
+						   const char *out_path, const VmOptions * options)
 {
 	long		total_old,
 				total_new;
@@ -969,7 +973,8 @@ parse_vm_flags(int argc, char **argv, int start, VmOptions * options,
 			}
 			else
 			{
-				fprintf(stderr, "bad --heap-range value %s, expected A-B (ignored)\n",
+				fprintf(stderr,
+						"bad --heap-range value %s, expected A-B (ignored)\n",
 						argv[i]);
 			}
 		}
