@@ -47,14 +47,14 @@
 	do {                                                                       \
 		if ((vec)->count == (vec)->cap) {                                      \
 			long _vec_new_cap = (vec)->cap ? (vec)->cap * 2 : 16;              \
-			void *_vec_new_items =                                            \
+			void *_vec_new_items =                                             \
 				realloc((vec)->items, _vec_new_cap * sizeof(ElemType));        \
-			if (!_vec_new_items) {                                            \
-				fprintf(stderr, "out of memory (realloc failed)\n");          \
+			if (!_vec_new_items) {                                             \
+				fprintf(stderr, "out of memory (realloc failed)\n");           \
 				exit(1);                                                       \
 			}                                                                  \
-			(vec)->items = _vec_new_items;                                    \
-			(vec)->cap = _vec_new_cap;                                        \
+			(vec)->items = _vec_new_items;                                     \
+			(vec)->cap = _vec_new_cap;                                         \
 		}                                                                      \
 		(vec)->items[(vec)->count++] = (ElemType){__VA_ARGS__};                \
 	} while (0)
@@ -621,7 +621,6 @@ print_header_line(FILE *out, const char *indent,
 	}
 }
 
-
 /*
  * print_internal_compressed - print a page's internal (non-leaf + leaf)
  * category bytes as run-length compressed ranges, split into the NONLEAF
@@ -769,8 +768,8 @@ print_leaf_compressed(FILE *out, const char *indent,
 		}
 		else
 		{
-			snprintf(range_label, sizeof(range_label), "%8ld-%-8ld",
-					 hp_start, hp_end);
+			snprintf(range_label, sizeof(range_label), "%8ld-%-8ld", hp_start,
+					 hp_end);
 		}
 
 		fprintf(out, "%s    heap page %-17s: category=%-3u avail_bytes=%-5u",
@@ -824,21 +823,25 @@ print_leaf_expanded(FILE *out, const char *indent,
 }
 
 /*
-* fsm_kind_name - human-readable name for a tree level
-*/
+ * fsm_kind_name - human-readable name for a tree level
+ */
 static const char *
 fsm_kind_name(int level)
 {
 	if (level == 0)
+	{
 		return "ROOT";
+	}
 	if (level == 1)
+	{
 		return "INTERNAL";
+	}
 	return "LEAF";
 }
 
 /*
-* dump_zero_page - print an all-zero (uninitialized) page
-*/
+ * dump_zero_page - print an all-zero (uninitialized) page
+ */
 static void
 dump_zero_page(FILE *out, const char *prefix, const char *branch,
 			   long id, const char *kind_name,
@@ -863,9 +866,9 @@ dump_zero_page(FILE *out, const char *prefix, const char *branch,
 }
 
 /*
-* dump_wrong_pagesize_page - print a page whose header
-* pagesize mismatches BLCKSZ
-*/
+ * dump_wrong_pagesize_page - print a page whose header
+ * pagesize mismatches BLCKSZ
+ */
 static void
 dump_wrong_pagesize_page(FILE *out, const char *prefix,
 						 const char *branch, long id,
@@ -888,9 +891,9 @@ dump_wrong_pagesize_page(FILE *out, const char *prefix,
 }
 
 /*
-* dump_invalid_header_page - print a page that failed
-* header sanity checks
-*/
+ * dump_invalid_header_page - print a page that failed
+ * header sanity checks
+ */
 static void
 dump_invalid_header_page(FILE *out, const char *prefix,
 						 const char *branch, long id,
@@ -911,9 +914,9 @@ dump_invalid_header_page(FILE *out, const char *prefix,
 }
 
 /*
-* dump_valid_page_summary - print header/internal-array
-* part of a valid page
-*/
+ * dump_valid_page_summary - print header/internal-array
+ * part of a valid page
+ */
 static void
 dump_valid_page_summary(FILE *out, const char *prefix,
 						const char *branch, long id,
@@ -946,8 +949,8 @@ dump_valid_page_summary(FILE *out, const char *prefix,
 }
 
 /*
-* update_leaf_stats
-*/
+ * update_leaf_stats
+ */
 static LeafPageAgg update_leaf_stats(const FsmPageInfo * page_info, long id,
 									 DumpStats * stats)
 {
@@ -971,13 +974,13 @@ static LeafPageAgg update_leaf_stats(const FsmPageInfo * page_info, long id,
 }
 
 /*
-* dump_leaf_details - print per-leaf-page aggregate + slot listing
-*/
+ * dump_leaf_details - print per-leaf-page aggregate + slot listing
+ */
 static void
 dump_leaf_details(FILE *out, const char *child_indent,
 				  const FsmPageInfo * page_info,
-				  const FsmOptions * options,
-				  const LeafPageAgg * agg, int show)
+				  const FsmOptions * options, const LeafPageAgg * agg,
+				  int show)
 {
 	if (!show)
 	{
@@ -1043,14 +1046,14 @@ dump_node(FILE *out, FsmPageInfo * pages, LongVec * children,
 	else if (page_info->header_status == HEADER_WRONG_PAGESIZE)
 	{
 		stats->n_invalid++;
-		dump_wrong_pagesize_page(out, prefix, branch, id, kind_name,
-								 page_info, options, show);
+		dump_wrong_pagesize_page(out, prefix, branch, id, kind_name, page_info,
+								 options, show);
 	}
 	else if (!page_info->valid)
 	{
 		stats->n_invalid++;
-		dump_invalid_header_page(out, prefix, branch, id, kind_name,
-								 page_info, options, show);
+		dump_invalid_header_page(out, prefix, branch, id, kind_name, page_info,
+								 options, show);
 	}
 	else
 	{
@@ -1126,8 +1129,8 @@ report_heap_page_lookup(FILE *out, FsmPageInfo * pages,
 }
 
 /*
-* print info how many pages  belongs to category
-*/
+ * print info how many pages  belongs to category
+ */
 static void
 print_page_by_category(FILE *out, const DumpStats * stats)
 {
@@ -1148,10 +1151,11 @@ print_page_by_category(FILE *out, const DumpStats * stats)
 }
 
 /*
-* print entire information about flags before printing tree
-*/
+ * print entire information about flags before printing tree
+ */
 static void
-print_entire_info(FILE *out, const FsmOptions * options, const char *in_path, long total_pages)
+print_entire_info(FILE *out, const FsmOptions * options,
+				  const char *in_path, long total_pages)
 {
 	fprintf(out, "=== pg_fsm dump: %s ===\n", in_path);
 	fprintf(out, "file size: %ld bytes, total pages: %ld (%d bytes/page)\n",
@@ -1163,8 +1167,7 @@ print_entire_info(FILE *out, const FsmOptions * options, const char *in_path, lo
 			options->show_slots ? "on" : "off", options->expand ? "on" : "off");
 	if (options->has_range)
 	{
-		fprintf(
-				out,
+		fprintf(out,
 				"printing only pages [%ld, %ld] (SUMMARY covers the "
 				"whole file)\n",
 				options->range_lo, options->range_hi);
@@ -1182,8 +1185,7 @@ print_summery(FILE *out, const DumpStats * stats, long total_pages)
 	fprintf(out, "\n-------------------------------------------------------"
 			"-------\n");
 	fprintf(out, "SUMMARY\n");
-	fprintf(
-			out,
+	fprintf(out,
 			"--------------------------------------------------------------\n");
 	fprintf(out, "root pages: %ld  internal pages: %ld  leaf pages: %ld\n",
 			stats->n_root, stats->n_internal, stats->n_leaf);
@@ -1440,9 +1442,10 @@ print_leaf_diff(FILE *out, int do_print, const char *indent,
 }
 
 /*
-* diff_ref_page - pick which page's tree info to use for kind_name display
-*/
-static FsmPageInfo * diff_ref_page(FsmPageInfo * old_page, FsmPageInfo * new_page)
+ * diff_ref_page - pick which page's tree info to use for kind_name display
+ */
+static FsmPageInfo * diff_ref_page(FsmPageInfo * old_page,
+								   FsmPageInfo * new_page)
 {
 	if (new_page && !new_page->allzero && new_page->valid)
 	{
@@ -1452,8 +1455,8 @@ static FsmPageInfo * diff_ref_page(FsmPageInfo * old_page, FsmPageInfo * new_pag
 }
 
 /*
-* header_structural_changed - true if any structural header field differs
-*/
+ * header_structural_changed - true if any structural header field differs
+ */
 static int
 header_structural_changed(const PageHeaderData *old_hdr,
 						  const PageHeaderData *new_hdr,
@@ -1468,14 +1471,15 @@ header_structural_changed(const PageHeaderData *old_hdr,
 }
 
 /*
-* header_changed - true if structural fields, lsn, or checksum differ
-*/
+ * header_changed - true if structural fields, lsn, or checksum differ
+ */
 static int
 header_changed(const PageHeaderData *old_hdr,
 			   const PageHeaderData *new_hdr, int structural)
 {
 	return structural ||
-		MY_PG_FSM_LSN_GET(old_hdr->pd_lsn) != MY_PG_FSM_LSN_GET(new_hdr->pd_lsn) ||
+		MY_PG_FSM_LSN_GET(old_hdr->pd_lsn) !=
+		MY_PG_FSM_LSN_GET(new_hdr->pd_lsn) ||
 		old_hdr->pd_checksum != new_hdr->pd_checksum;
 }
 
@@ -1484,12 +1488,11 @@ static void
 report_header_diff(FILE *out, const char *child_indent, int show,
 				   const FsmOptions * options,
 				   const PageHeaderData *old_hdr,
-				   const PageHeaderData *new_hdr,
-				   int old_next_slot, int new_next_slot,
-				   DiffStats * stats)
+				   const PageHeaderData *new_hdr, int old_next_slot,
+				   int new_next_slot, DiffStats * stats)
 {
-	int			structural = header_structural_changed(old_hdr, new_hdr,
-													   old_next_slot, new_next_slot);
+	int			structural = header_structural_changed(old_hdr, new_hdr, old_next_slot,
+													   new_next_slot);
 
 	if (!header_changed(old_hdr, new_hdr, structural))
 	{
@@ -1515,8 +1518,8 @@ report_header_diff(FILE *out, const char *child_indent, int show,
 }
 
 /*
-* report_changed_page - handle ST_CHANGED: header diff + internal/leaf diffs
-*/
+ * report_changed_page - handle ST_CHANGED: header diff + internal/leaf diffs
+ */
 static void
 report_changed_page(FILE *out, const char *child_indent, int show,
 					const FsmOptions * options,
@@ -1534,18 +1537,17 @@ report_changed_page(FILE *out, const char *child_indent, int show,
 		print_internal_diff(out, show, child_indent, old_page, new_page,
 							options, stats);
 	}
-	print_leaf_diff(out, show, child_indent, old_page, new_page, options,
-					stats, deltas);
+	print_leaf_diff(out, show, child_indent, old_page, new_page, options, stats,
+					deltas);
 }
 
-
 /*
-* diff_print_status_line - print "N fsm [KIND] STATUS" if show is set
-*/
+ * diff_print_status_line - print "N fsm [KIND] STATUS" if show is set
+ */
 static void
 diff_print_status_line(FILE *out, const char *prefix, long id,
-					   const char *kind_name,
-					   Status status, int show)
+					   const char *kind_name, Status status,
+					   int show)
 {
 	static const char *branch = "\\-- ";
 
@@ -1558,8 +1560,8 @@ diff_print_status_line(FILE *out, const char *prefix, long id,
 }
 
 /*
-* diff_apply_status - update per-page-status counters
-*/
+ * diff_apply_status - update per-page-status counters
+ */
 static void
 diff_apply_status(FILE *out, const char *child_indent, int show,
 				  const FsmOptions * options, Status status,
@@ -1584,17 +1586,17 @@ diff_apply_status(FILE *out, const char *child_indent, int show,
 }
 
 /*
-* prototype for recursion resolution
-*/
+ * prototype for recursion resolution
+ */
 static void diff_node(FILE *out, FsmPageInfo * old_pages, long total_old,
-					  FsmPageInfo * new_pages, long total_new,
-					  LongVec * children, long id, const char *prefix,
-					  int is_last, const FsmOptions * options,
-					  DiffStats * stats, LeafDeltaVec * deltas);
+					  FsmPageInfo * new_pages, long total_new, LongVec * children,
+					  long id, const char *prefix, int is_last,
+					  const FsmOptions * options, DiffStats * stats,
+					  LeafDeltaVec * deltas);
 
 /*
-* diff_recurse_children - recurse into id's children with the given indent
-*/
+ * diff_recurse_children - recurse into id's children with the given indent
+ */
 static void
 diff_recurse_children(FILE *out, FsmPageInfo * old_pages,
 					  long total_old, FsmPageInfo * new_pages,
@@ -1626,10 +1628,10 @@ diff_recurse_children(FILE *out, FsmPageInfo * old_pages,
  */
 static void
 diff_node(FILE *out, FsmPageInfo * old_pages, long total_old,
-		  FsmPageInfo * new_pages, long total_new,
-		  LongVec * children, long id, const char *prefix,
-		  int is_last, const FsmOptions * options,
-		  DiffStats * stats, LeafDeltaVec * deltas)
+		  FsmPageInfo * new_pages, long total_new, LongVec * children,
+		  long id, const char *prefix, int is_last,
+		  const FsmOptions * options, DiffStats * stats,
+		  LeafDeltaVec * deltas)
 {
 	FsmPageInfo *old_page;
 	FsmPageInfo *new_page;
@@ -1645,7 +1647,8 @@ diff_node(FILE *out, FsmPageInfo * old_pages, long total_old,
 	ref = diff_ref_page(old_page, new_page);
 	kind_name = ref ? fsm_kind_name(ref->tree.level) : "?";
 
-	show = in_page_range(options, id) &&
+	show =
+		in_page_range(options, id) &&
 		!(options->only_changed && (status == ST_SAME || status == ST_EMPTY));
 
 	snprintf(child_indent, sizeof(child_indent), "%s    ", prefix);
@@ -1658,8 +1661,8 @@ diff_node(FILE *out, FsmPageInfo * old_pages, long total_old,
 }
 
 /*
-* diff_print_header - print the "=== pg_fsm diff ===" preamble
-*/
+ * diff_print_header - print the "=== pg_fsm diff ===" preamble
+ */
 static void
 diff_print_header(FILE *out, const char *old_path, long total_old,
 				  const char *new_path, long total_new,
@@ -1693,8 +1696,8 @@ diff_print_header(FILE *out, const char *old_path, long total_old,
 }
 
 /*
-* sum_leaf_avail - total avail_bytes across all valid/zero leaf pages
-*/
+ * sum_leaf_avail - total avail_bytes across all valid/zero leaf pages
+ */
 static double
 sum_leaf_avail(const FsmPageInfo * pages, long total_pages)
 {
@@ -1717,13 +1720,12 @@ sum_leaf_avail(const FsmPageInfo * pages, long total_pages)
 }
 
 /*
-* diff_print_summary - print the "-q" SUMMARY block from DiffStats
-*/
+ * diff_print_summary - print the "-q" SUMMARY block from DiffStats
+ */
 static void
 diff_print_summary(FILE *out, const DiffStats * stats)
 {
-	fprintf(out,
-			"\n----------------------------------------------------------"
+	fprintf(out, "\n----------------------------------------------------------"
 			"----\n");
 	fprintf(out, "SUMMARY\n");
 	fprintf(out,
@@ -1792,8 +1794,8 @@ static FsmResult do_fsm_diff(const char *old_path, const char *new_path,
 
 	diff_print_header(out, old_path, total_old, new_path, total_new, options);
 
-	diff_node(out, old_pages, total_old, new_pages, total_new, children, 0,
-			  "", 1, options, &stats, &deltas);
+	diff_node(out, old_pages, total_old, new_pages, total_new, children, 0, "",
+			  1, options, &stats, &deltas);
 
 	stats.old_total_avail = sum_leaf_avail(old_pages, total_old);
 	stats.new_total_avail = sum_leaf_avail(new_pages, total_new);
@@ -1813,8 +1815,8 @@ static FsmResult do_fsm_diff(const char *old_path, const char *new_path,
 }
 
 /*
-* fsm_usage - print command-line usage/help text to stderr.
-*/
+ * fsm_usage - print command-line usage/help text to stderr.
+ */
 static void
 fsm_usage(const char *prog)
 {
@@ -1845,7 +1847,7 @@ fsm_usage(const char *prog)
 
 /*
  * parse_fsm_flags - parse command-line flags shared by "dump" and "diff"
-*/
+ */
 static void
 parse_fsm_flags(int argc, char **argv, int start,
 				FsmOptions * options, char **pos, int *npos)
