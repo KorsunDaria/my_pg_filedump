@@ -30,13 +30,14 @@
 #undef Assert
 #define Assert(X)
 
-#include "pg_fsm.h"
-#include "pg_vm.h"
-
 #include "storage/checksum.h"
 #include "storage/checksum_impl.h"
 #include "decode.h"
 #include <inttypes.h>
+
+#include "pg_fsm.h"
+#include "pg_vm.h"
+
 
 /*
  * Global variables for ease of use mostly
@@ -2600,19 +2601,28 @@ PrintRelMappings(void)
 	return 1;
 }
 
-static int run_module(int argc, char **argv, int flag_index, int (*module_main)(int, char**)) {
-    char **new_argv = malloc(argc * sizeof(char *));
-    int new_argc = 0;
+static int
+DumpFsmVmFile(int argc, char **argv, int flag_index, int (*module_main) (int, char **))
+{
 
-    for (int i = 0; i < argc; i++) {
-        if (i != flag_index) {
-            new_argv[new_argc++] = argv[i];
-        }
-    }
+	int			i;
+	int			result;
+	int			new_argc;
 
-    int result = module_main(new_argc, new_argv);
-    free(new_argv);
-    return result;
+	new_argc = 0;
+	char	  **new_argv = malloc(argc * sizeof(char *));
+
+	for (i = 0; i < argc; i++)
+	{
+		if (i != flag_index)
+		{
+			new_argv[new_argc++] = argv[i];
+		}
+	}
+
+	result = module_main(new_argc, new_argv);
+	free(new_argv);
+	return result;
 }
 
 /* Consume the options and iterate through the given file, formatting as
@@ -2625,11 +2635,11 @@ main(int argv, char **argc)
     {
         if (strcmp(argc[i], "-F") == 0)
         {
-            return run_module(argv, argc, i, fsm_main);
+            return DumpFsmVmFile(argv, argc, i, fsm_main);
         }
         if (strcmp(argc[i], "-V") == 0)
         {
-            return run_module(argv, argc, i, vm_main);
+            return DumpFsmVmFile(argv, argc, i, vm_main);
         }
     }
 

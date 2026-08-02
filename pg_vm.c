@@ -11,11 +11,11 @@
  *   --only-changed     diff: only print ranges whose status changed
  *
  */
+#include "postgres.h"
 
 #include "access/visibilitymapdefs.h"
 #include "storage/bufpage.h"
 
-#include "postgres.h"
 #include "pg_vm.h"
 
 #define MAP_SIZE ((int)(BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
@@ -29,6 +29,7 @@
 
 #define MY_PG_VM_LSN_GET(val)                                                  \
 	(((uint64)(val).xlogid << 32) | (uint64)(val).xrecoff)
+
 
 /*
  * Help understand what was wrong during parse of the page header

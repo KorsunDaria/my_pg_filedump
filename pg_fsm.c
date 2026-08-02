@@ -23,12 +23,12 @@
 /* pg indent */
 /* ! (пропускать те кт у кого нет страниц) */
 /* ! анализ насколько полетели на реплике */
+#include "postgres.h"
 
 #include "access/htup_details.h"
 #include "storage/bufpage.h"
 #include "storage/fsm_internals.h"
 
-#include "postgres.h"
 #include "pg_fsm.h"
 
 #define FSM_CATEGORIES 256
