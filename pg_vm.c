@@ -12,11 +12,11 @@
  *
  */
 
-#include "postgres.h"
-#include "pg_vm.h"
-
 #include "access/visibilitymapdefs.h"
 #include "storage/bufpage.h"
+
+#include "postgres.h"
+#include "pg_vm.h"
 
 #define MAP_SIZE ((int)(BLCKSZ - MAXALIGN(SizeOfPageHeaderData)))
 #define HEAPBLOCKS_PER_BYTE (8 / BITS_PER_HEAPBLOCK)	/* 4 */

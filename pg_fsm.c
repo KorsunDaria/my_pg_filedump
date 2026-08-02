@@ -16,23 +16,23 @@
  *
  */
 
-/* добавить что корректно не валидно в вывод количество страницы по категориям
- * от 0 до 255 */
+/*
+ * добавить что корректно не валидно в вывод количество страницы по категориям
+ * от 0 до 255
+ */
 /* pg indent */
 /* ! (пропускать те кт у кого нет страниц) */
 /* ! анализ насколько полетели на реплике */
-
-#include "postgres.h"
-#include "pg_fsm.h"
 
 #include "access/htup_details.h"
 #include "storage/bufpage.h"
 #include "storage/fsm_internals.h"
 
+#include "postgres.h"
+#include "pg_fsm.h"
+
 #define FSM_CATEGORIES 256
 #define FSM_CAT_STEP (BLCKSZ / FSM_CATEGORIES)
-#define MY_PG_FSM_LSN_GET(val)                                                 \
-	(((uint64)(val).xlogid << 32) | (uint64)(val).xrecoff)
 
 /*
  * Generic growable array ("vector") of T
@@ -593,13 +593,21 @@ print_header_line(FILE *out, const char *indent,
 				  const FsmPageInfo * page_info)
 {
 	PageHeaderData header;
+	unsigned long long lsn;
 
 	header = page_info->header;
 
 	fprintf(out, "%s  header:", indent);
 
-	fprintf(out, " pd_lsn=%llX",
-			(unsigned long long) MY_PG_FSM_LSN_GET(header.pd_lsn));
+	if (PG_VERSION_NUM >= 190000)
+	{
+		lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+	}
+	else if (PG_VERSION_NUM >= 140000)
+	{
+		lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+	}
+	fprintf(out, " pd_lsn=%llX", lsn);
 
 	fprintf(out, " pd_checksum=%u", header.pd_checksum);
 	fprintf(out, " pd_flags=0x%x", header.pd_flags);
@@ -1176,11 +1184,11 @@ print_entire_info(FILE *out, const FsmOptions * options,
 }
 
 /*
- * print_summery - 	print summary information (-q) built
+ * print_summary - 	print summary information (-q) built
  * from the DumpStats it accumulated.
  */
 static void
-print_summery(FILE *out, const DumpStats * stats, long total_pages)
+print_summary(FILE *out, const DumpStats * stats, long total_pages)
 {
 	fprintf(out, "\n-------------------------------------------------------"
 			"-------\n");
@@ -1253,7 +1261,7 @@ static FsmResult do_fsm_dump(const char *in_path, const char *out_path,
 
 	if (options->stats)
 	{
-		print_summery(out, &stats, total_pages);
+		print_summary(out, &stats, total_pages);
 	}
 
 	fclose(out);
@@ -1477,9 +1485,21 @@ static int
 header_changed(const PageHeaderData *old_hdr,
 			   const PageHeaderData *new_hdr, int structural)
 {
+	unsigned long long old_lsn;
+	unsigned long long new_lsn;
+
+	if (PG_VERSION_NUM >= 190000)
+	{
+		old_lsn = (unsigned long long) PageXLogRecPtrGet(old_hdr->pd_lsn);
+		new_lsn = (unsigned long long) PageXLogRecPtrGet(new_hdr->pd_lsn);
+	}
+	else if (PG_VERSION_NUM >= 140000)
+	{
+		old_lsn = (unsigned long long) PageXLogRecPtrGet(old_hdr->pd_lsn);
+		new_lsn = (unsigned long long) PageXLogRecPtrGet(new_hdr->pd_lsn);
+	}
 	return structural ||
-		MY_PG_FSM_LSN_GET(old_hdr->pd_lsn) !=
-		MY_PG_FSM_LSN_GET(new_hdr->pd_lsn) ||
+		old_lsn != new_lsn ||
 		old_hdr->pd_checksum != new_hdr->pd_checksum;
 }
 
