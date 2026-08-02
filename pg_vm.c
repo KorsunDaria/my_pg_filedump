@@ -1,8 +1,8 @@
 /*
  *   -H                 print header
  *   -q                 add summary block at the end
- *   --heap-range A-B   heap pages [A,B]
- *   --heap-page N      dump only: status of one heap page
+ *   --range A-B   heap pages [A,B]
+ *   --page N      dump only: status of one heap page
  *   --extra            print one line per heap page
  *   --only-not-visible dump: only print ranges where ALL_VISIBLE is not set
  *   --only-not-frozen  dump: only print ranges where ALL_FROZEN is not set
@@ -43,8 +43,8 @@ typedef enum
  */
 typedef enum
 {
-VM_FAIL = 0, VM_SUCCESS = 1
-}           VmResult;
+	VM_FAIL = 0, VM_SUCCESS = 1
+} VmResult;
 
 /*
  * VmPageInfo - everything about one VM (visibility map) page.
@@ -59,8 +59,8 @@ typedef struct
 	HeaderStatus header_status; /* result of header sanity checks */
 	const char *invalid_reason; /* text reason if invalid */
 
+	uint8		bitmap[MAP_SIZE];	/* per-page visibility bits */
 	PageHeaderData header;		/* raw copy of the standard page header */
-	uint8		bitmap[MAP_SIZE];	/* per-heap-page visibility bits */
 }			VmPageInfo;
 
 /*
@@ -249,7 +249,7 @@ static VmPageInfo * load_vm(const char *path, long *out_total_pages)
 
 /*
  * heap_page_status - look up the visibility-map status bits for one heap
- * page. 
+ * page.
  */
 static int
 heap_page_status(const VmPageInfo * pages, long total_pages,
@@ -437,26 +437,60 @@ status_has_frozen(int status)
 }
 
 /*
+ * print_header_line - print one page's raw header fields
+ */
+static void
+print_header_line(FILE *out, const VmPageInfo * page_info)
+{
+	PageHeaderData header;
+	unsigned long long lsn;
+
+	header = page_info->header;
+
+	if (PG_VERSION_NUM >= 190000)
+	{
+		lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+	}
+	else if (PG_VERSION_NUM >= 140000)
+	{
+		lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
+	}
+
+	fprintf(
+			out,
+			"vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
+			"special=%u\n",
+			page_info->page, lsn,
+			header.pd_checksum, header.pd_flags, header.pd_lower,
+			header.pd_upper, header.pd_special);
+}
+
+/*
  * print_page_headers - print the "-H" per-physical-page header inventory.
  */
 static void
 print_page_headers(FILE *out, const VmPageInfo * pages,
 				   long total_pages)
 {
-	long		        page_index;
-    unsigned long long  lsn;
-
+	long		page_index;
 
 	fprintf(out, "\n-- physical page headers (-H) --\n");
 
 	for (page_index = 0; page_index < total_pages; page_index++)
 	{
 		const		VmPageInfo *page_info = &pages[page_index];
-		PageHeaderData header;
 
 		if (page_info->allzero)
 		{
 			fprintf(out, "vm page %ld: empty (all-zero)\n", page_index);
+			continue;
+		}
+		if (page_info->header_status == HEADER_WRONG_PAGESIZE)
+		{
+			fprintf(out,
+					"vm page %ld: -- WRONG PAGE SIZE, rebuild pg_vm with the "
+					"server's --with-blocksize\n",
+					page_index);
 			continue;
 		}
 		if (page_info->header_status == HEADER_INVALID)
@@ -466,26 +500,12 @@ print_page_headers(FILE *out, const VmPageInfo * pages,
 			continue;
 		}
 
-        if (PG_VERSION_NUM >= 190000) {
-					   lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
-        }
-        else if (PG_VERSION_NUM >= 140000){
-					   lsn = (unsigned long long) PageXLogRecPtrGet(header.pd_lsn);
-        }
-
-		header = page_info->header;
-		fprintf(
-				out,
-				"vm page %ld: lsn=%llX checksum=%u flags=0x%x lower=%u upper=%u "
-				"special=%u\n",
-				page_index, lsn,
-				header.pd_checksum, header.pd_flags, header.pd_lower,
-				header.pd_upper, header.pd_special);
+		print_header_line(out, page_info);
 	}
 }
 
 /*
- * print_compressed - print the "-s"-style compressed heap-page status
+ * print_compressed - print the "-s"-style compressed page status
  * ranges for the dump command.
  */
 static void
@@ -613,7 +633,7 @@ print_expanded_diff(FILE *out, const VmPageInfo * old_pages,
 
 /*
  * default_heap_to - the last valid heap page index for a VM file with
- * total_pages physical pages, used when --heap-range is not given.
+ * total_pages physical pages, used when --range is not given.
  */
 static long
 default_heap_to(long total_pages)
@@ -622,20 +642,20 @@ default_heap_to(long total_pages)
 }
 
 /*
- * resolve_heap_range - work out the [from, to] heap-page range to process,
- * honoring --heap-range if it was given.
+ * resolve_heap_range - work out the [from, to] page range to process,
+ * honoring --range if it was given.
  */
 static void
 resolve_heap_range(const VmOptions * options, long total_pages,
 				   long *from, long *to)
 {
-	*from = options->has_heap_range ? options->heap_from : 0;
-	*to = options->has_heap_range ? options->heap_to
+	*from = options->has_range ? options->range_lo : 0;
+	*to = options->has_range ? options->range_hi
 		: default_heap_to(total_pages);
 }
 
 /*
- * do_vm_dump_heap_page - implement the "--heap-page N" lookup mode: print
+ * do_vm_dump_heap_page - implement the "--page N" lookup mode: print
  * the status of a single heap page and nothing else.
  */
 static void
@@ -647,7 +667,7 @@ do_vm_dump_heap_page(FILE *out, const char *in_path,
 
 	status = heap_page_status(pages, total_pages, options->heap_page_query);
 
-	fprintf(out, "=== pg_vm dump: %s (--heap-page %ld lookup) ===\n", in_path,
+	fprintf(out, "=== pg_vm dump: %s (--page %ld lookup) ===\n", in_path,
 			options->heap_page_query);
 	fprintf(out, "heap page %ld: %s\n", options->heap_page_query,
 			status_label(status));
@@ -694,7 +714,7 @@ print_dump_summary(FILE *out, const VmRunVec * compressed, long from,
 }
 
 /*
- * do_vm_dump_range - print the (compressed or expanded) heap-page status
+ * do_vm_dump_range - print the (compressed or expanded) page status
  * for [from, to], plus an optional summary.
  */
 static void
@@ -725,8 +745,8 @@ do_vm_dump_range(FILE *out, const VmPageInfo * pages,
 
 /*
  * do_vm_dump - implement the "dump" command: load the VM file, then either
- * answer a single --heap-page query or print the full (compressed or
- * expanded) heap-page status listing plus an optional summary (-q).
+ * answer a single --page query or print the full (compressed or
+ * expanded) page status listing plus an optional summary (-q).
  */
 static VmResult do_vm_dump(const char *in_path, const char *out_path,
 						   const VmOptions * options)
@@ -880,7 +900,7 @@ do_vm_diff_range(FILE *out, const VmPageInfo * old_pages,
 
 /*
  * do_vm_diff - implement the "diff" command: load both VM files, then
- * print the (compressed or expanded) old->new heap-page status for the
+ * print the (compressed or expanded) old->new page status for the
  * requested range plus an optional summary (-q).
  */
 static VmResult do_vm_diff(const char *old_path, const char *new_path,
@@ -947,8 +967,8 @@ vm_usage(const char *prog)
 			"flags:\n"
 			"  -H                  per-physical-page header inventory\n"
 			"  -q                  add summary\n"
-			"  --heap-range A-B    process heap pages [A,B]\n"
-			"  --heap-page N       dump only: status of one heap "
+			"  --range A-B    process heap pages [A,B]\n"
+			"  --page N       dump only: status of one heap "
 			"page\n"
 			"  --extra             one line per heap page\n"
 			"  --only-not-visible  dump: only ranges missing ALL_VISIBLE\n"
@@ -972,25 +992,25 @@ parse_vm_flags(int argc, char **argv, int start, VmOptions * options,
 	{
 		const char *a = argv[i];
 
-		if (strcmp(a, "--heap-range") == 0 && i + 1 < argc)
+		if (strcmp(a, "--range") == 0 && i + 1 < argc)
 		{
 			long		lo,
 						hi;
 
 			if (sscanf(argv[++i], "%ld-%ld", &lo, &hi) == 2)
 			{
-				options->has_heap_range = 1;
-				options->heap_from = lo;
-				options->heap_to = hi;
+				options->has_range = 1;
+				options->range_lo = lo;
+				options->range_hi = hi;
 			}
 			else
 			{
 				fprintf(stderr,
-						"bad --heap-range value %s, expected A-B (ignored)\n",
+						"bad --range value %s, expected A-B (ignored)\n",
 						argv[i]);
 			}
 		}
-		else if (strcmp(a, "--heap-page") == 0 && i + 1 < argc)
+		else if (strcmp(a, "--page") == 0 && i + 1 < argc)
 		{
 			options->has_heap_page = 1;
 			options->heap_page_query = atol(argv[++i]);

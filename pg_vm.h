@@ -3,14 +3,18 @@
 
 #include "postgres.h"
 
-typedef struct {
+typedef struct 
+{
   int show_headers;
   int stats;
-  int has_heap_range;
-  long heap_from, heap_to;
+
+  int has_range;
+  long range_lo, range_hi;
+
   int has_heap_page;
   long heap_page_query;
   int expand;
+
   int only_not_visible;
   int only_not_frozen;
   int only_changed;
