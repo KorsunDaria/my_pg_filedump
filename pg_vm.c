@@ -2,7 +2,7 @@
  *   -H                 print header
  *   -q                 add summary block at the end
  *   --range A-B   heap pages [A,B]
- *   --page N      dump only: status of one heap page
+ *   --heap-page N      dump only: status of one heap page
  *   --extra            print one line per heap page
  *   --only-not-visible dump: only print ranges where ALL_VISIBLE is not set
  *   --only-not-frozen  dump: only print ranges where ALL_FROZEN is not set
@@ -969,7 +969,7 @@ vm_usage(const char *prog)
 			"  -H                  per-physical-page header inventory\n"
 			"  -q                  add summary\n"
 			"  --range A-B    process heap pages [A,B]\n"
-			"  --page N       dump only: status of one heap "
+			"  --heap-page N       dump only: status of one heap "
 			"page\n"
 			"  --extra             one line per heap page\n"
 			"  --only-not-visible  dump: only ranges missing ALL_VISIBLE\n"
@@ -1011,7 +1011,7 @@ parse_vm_flags(int argc, char **argv, int start, VmOptions * options,
 						argv[i]);
 			}
 		}
-		else if (strcmp(a, "--page") == 0 && i + 1 < argc)
+		else if (strcmp(a, "--heap-page") == 0 && i + 1 < argc)
 		{
 			options->has_heap_page = 1;
 			options->heap_page_query = atol(argv[++i]);

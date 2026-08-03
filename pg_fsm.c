@@ -1277,6 +1277,12 @@ typedef enum
 	ST_SAME, ST_CHANGED, ST_ADDED, ST_REMOVED, ST_EMPTY
 }			Status;
 
+static int	header_structural_changed(const PageHeaderData *old_hdr,
+									  const PageHeaderData *new_hdr,
+									  int old_next_slot, int new_next_slot);
+static int	header_changed(const PageHeaderData *old_hdr,
+						   const PageHeaderData *new_hdr, int structural);
+
 /*
  * page_status - classify a page's change status between two files by
  * comparing
@@ -1286,6 +1292,9 @@ static Status page_status(const FsmPageInfo * old_page,
 {
 	int			old_ok = old_page && !old_page->allzero && old_page->valid;
 	int			new_ok = new_page && !new_page->allzero && new_page->valid;
+	int			nodes_changed;
+	int			structural;
+	int			hdr_changed;
 
 	if (!old_ok && new_ok)
 	{
@@ -1299,7 +1308,15 @@ static Status page_status(const FsmPageInfo * old_page,
 	{
 		return ST_EMPTY;
 	}
-	if (memcmp(old_page->nodes, new_page->nodes, NodesPerPage) != 0)
+
+	nodes_changed = memcmp(old_page->nodes, new_page->nodes, NodesPerPage) != 0;
+
+	structural = header_structural_changed(&old_page->header, &new_page->header,
+										   old_page->fp_next_slot,
+										   new_page->fp_next_slot);
+	hdr_changed = header_changed(&old_page->header, &new_page->header, structural);
+
+	if (nodes_changed || hdr_changed)
 	{
 		return ST_CHANGED;
 	}
@@ -1344,35 +1361,56 @@ print_internal_diff(FILE *out, int do_print, const char *indent,
 	for (i = 0; i < compressed.count; i++)
 	{
 		const		ByteDiffCompressedRange *r = &compressed.items[i];
+		int			changed = r->old_value != r->new_value;
+		const char *tag = changed ? "CHANGED" : "same";
 
-		if (r->old_value == r->new_value)
+		if (changed)
+		{
+			stats->slots_changed += r->end - r->start + 1;
+			if (r->new_value > r->old_value)
+			{
+				stats->slots_up += r->end - r->start + 1;
+			}
+			else
+			{
+				stats->slots_down += r->end - r->start + 1;
+			}
+		}
+
+		/*
+		 * Without --only-changed, every range is printed (tagged [same] or
+		 * [CHANGED])
+		 */
+		if (options->only_changed && !changed)
 		{
 			continue;
-		}
-		stats->slots_changed += r->end - r->start + 1;
-		if (r->new_value > r->old_value)
-		{
-			stats->slots_up += r->end - r->start + 1;
-		}
-		else
-		{
-			stats->slots_down += r->end - r->start + 1;
 		}
 		if (!do_print)
 		{
 			continue;
 		}
-		if (r->start == r->end)
+		if (options->expand)
 		{
-			fprintf(out, "%s  internal-node %4ld           : %3u -> %3u\n",
-					indent, r->start, r->old_value, r->new_value);
+			long		j;
+
+			for (j = r->start; j <= r->end; j++)
+			{
+				fprintf(out,
+						"%s  internal-node %4ld           : %3u -> %3u  [%s]\n",
+						indent, j, r->old_value, r->new_value, tag);
+			}
+		}
+		else if (r->start == r->end)
+		{
+			fprintf(out, "%s  internal-node %4ld         : %3u -> %3u  [%s]\n",
+					indent, r->start, r->old_value, r->new_value, tag);
 		}
 		else
 		{
 			fprintf(
 					out,
-					"%s  internal-nodes %4ld-%-4ld    : %3u -> %3u (%ld node(s))\n",
-					indent, r->start, r->end, r->old_value, r->new_value,
+					"%s  internal-node %4ld-%-4ld    : %3u -> %3u  [%s] (%ld node(s))\n",
+					indent, r->start, r->end, r->old_value, r->new_value, tag,
 					r->end - r->start + 1);
 		}
 	}
@@ -1404,46 +1442,68 @@ print_leaf_diff(FILE *out, int do_print, const char *indent,
 		long		n = r->end - r->start + 1;
 		long		hp_start = old_page->tree.logpageno * LeafNodesPerPage + r->start;
 		long		hp_end = old_page->tree.logpageno * LeafNodesPerPage + r->end;
+		int			changed = r->old_value != r->new_value;
+		const char *tag = changed ? "CHANGED" : "same";
 		unsigned	ob,
 					nb;
-
-		if (r->old_value == r->new_value)
-		{
-			continue;
-		}
 
 		ob = cat_to_bytes(r->old_value);
 		nb = cat_to_bytes(r->new_value);
 
-		stats->slots_changed += n;
-		if (nb > ob)
+		if (changed)
 		{
-			stats->slots_up += n;
+			stats->slots_changed += n;
+			if (nb > ob)
+			{
+				stats->slots_up += n;
+			}
+			else
+			{
+				stats->slots_down += n;
+			}
+			VEC_PUSH(deltas, LeafDelta, hp_start, hp_end, (long) nb - (long) ob);
 		}
-		else
+
+		/*
+		 * Without --only-changed, every range is printed (tagged [same] or
+		 * [CHANGED])
+		 */
+		if (options->only_changed && !changed)
 		{
-			stats->slots_down += n;
+			continue;
 		}
-		VEC_PUSH(deltas, LeafDelta, hp_start, hp_end, (long) nb - (long) ob);
 		if (!do_print)
 		{
 			continue;
 		}
-		if (hp_start == hp_end)
+		fprintf(out, "\n");
+		if (options->expand)
+		{
+			long		j;
+
+			for (j = hp_start; j <= hp_end; j++)
+			{
+				fprintf(out,
+						"%s  leaf-slot heap page %8ld           : %3u -> %3u "
+						"(%5u -> %5u B)  [%s]\n",
+						indent, j, r->old_value, r->new_value, ob, nb, tag);
+			}
+		}
+		else if (hp_start == hp_end)
 		{
 			fprintf(out,
-					"%s  leaf-slot heap page %8ld           : %3u -> %3u (%5u "
+					"%s  leaf-slot heap page %8ld          : %3u -> %3u (%5u "
 					"-> %5u "
-					"B)\n",
-					indent, hp_start, r->old_value, r->new_value, ob, nb);
+					"B)  [%s]\n",
+					indent, hp_start, r->old_value, r->new_value, ob, nb, tag);
 		}
 		else
 		{
 			fprintf(out,
-					"%s  leaf-slots heap pages %8ld-%-8ld: %3u -> %3u (%5u -> "
-					"%5u B) (%ld page(s))\n",
+					"%s  leaf-slots heap page %8ld-%-8ld: %3u -> %3u (%5u -> "
+					"%5u B)  [%s] (%ld page(s))\n",
 					indent, hp_start, hp_end, r->old_value, r->new_value, ob,
-					nb, n);
+					nb, tag, n);
 		}
 	}
 	free(compressed.items);
@@ -1546,6 +1606,8 @@ report_changed_page(FILE *out, const char *child_indent, int show,
 					FsmPageInfo * old_page, FsmPageInfo * new_page,
 					DiffStats * stats, LeafDeltaVec * deltas)
 {
+	FsmPageInfo *ref;
+
 	stats->pages_changed++;
 
 	report_header_diff(out, child_indent, show, options, &old_page->header,
@@ -1557,8 +1619,12 @@ report_changed_page(FILE *out, const char *child_indent, int show,
 		print_internal_diff(out, show, child_indent, old_page, new_page,
 							options, stats);
 	}
-	print_leaf_diff(out, show, child_indent, old_page, new_page, options, stats,
-					deltas);
+
+
+	ref = diff_ref_page(old_page, new_page);
+
+	print_leaf_diff(out, show, child_indent, old_page, new_page, options,
+					stats, deltas);
 }
 
 /*
