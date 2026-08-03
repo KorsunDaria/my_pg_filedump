@@ -1476,7 +1476,6 @@ print_leaf_diff(FILE *out, int do_print, const char *indent,
 		{
 			continue;
 		}
-		fprintf(out, "\n");
 		if (options->expand)
 		{
 			long		j;
@@ -1492,7 +1491,7 @@ print_leaf_diff(FILE *out, int do_print, const char *indent,
 		else if (hp_start == hp_end)
 		{
 			fprintf(out,
-					"%s  leaf-slot heap page %8ld          : %3u -> %3u (%5u "
+					"%s  leaf-slot heap page %8ld         : %3u -> %3u (%5u "
 					"-> %5u "
 					"B)  [%s]\n",
 					indent, hp_start, r->old_value, r->new_value, ob, nb, tag);
@@ -1500,7 +1499,7 @@ print_leaf_diff(FILE *out, int do_print, const char *indent,
 		else
 		{
 			fprintf(out,
-					"%s  leaf-slots heap page %8ld-%-8ld: %3u -> %3u (%5u -> "
+					"%s  leaf-slot heap page %8ld-%-8ld: %3u -> %3u (%5u -> "
 					"%5u B)  [%s] (%ld page(s))\n",
 					indent, hp_start, hp_end, r->old_value, r->new_value, ob,
 					nb, tag, n);
